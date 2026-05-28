@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Сквозь чащу • Game Design Document</title>
+  <!-- Google Fonts: Cinzel для заголовков, Nunito для текста -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Nunito:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0f1a0b;
+      background-image: radial-gradient(circle at 20% 10%, #1e3b1a 2%, transparent 15%),
+                        radial-gradient(circle at 80% 70%, #2b4b1e 3%, transparent 20%),
+                        linear-gradient(180deg, #0c1308 0%, #172610 100%);
+      font-family: 'Nunito', sans-serif;
+      color: #e0e7d7;
+      padding: 2rem 1.5rem;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    .document {
+      max-width: 1000px;
+      width: 100%;
+      background: rgba(12, 19, 8, 0.75);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      border-radius: 2.5rem;
+      padding: 2.2rem 2.5rem;
+      box-shadow: 0 30px 50px rgba(0, 0, 0, 0.7), 0 0 0 2px rgba(212, 175, 55, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* декоративная паутина */
+    .document::before {
+      content: "";
+      position: absolute;
+      top: -20px;
+      right: -20px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle at 30% 30%, rgba(212, 175, 55, 0.08) 1px, transparent 3px);
+      background-size: 25px 25px;
+      mask-image: radial-gradient(circle, black 30%, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle, black 30%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .document::after {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: -10px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle at 70% 70%, rgba(212, 175, 55, 0.06) 1px, transparent 4px);
+      background-size: 30px 30px;
+      mask-image: radial-gradient(circle, black 25%, transparent 70%);
+      -webkit-mask-image: radial-gradient(circle, black 25%, transparent 70%);
+      pointer-events: none;
+    }
+
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-weight: 900;
+      font-size: 3.2rem;
+      color: #f3d779;
+      text-align: center;
+      letter-spacing: 4px;
+      text-shadow: 0 0 15px #b4942e, 0 4px 10px rgba(0,0,0,0.7);
+      margin-bottom: 0.5rem;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .subtitle {
+      text-align: center;
+      font-family: 'Cinzel', serif;
+      font-weight: 500;
+      font-size: 1.2rem;
+      color: #c7a84b;
+      border-bottom: 2px dashed rgba(212, 175, 55, 0.5);
+      padding-bottom: 1.2rem;
+      margin-bottom: 2rem;
+      letter-spacing: 2px;
+    }
+
+    h2 {
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 1.9rem;
+      color: #ebd184;
+      margin: 2.2rem 0 1rem;
+      border-left: 6px solid #d4af37;
+      padding-left: 1.2rem;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+
+    h3 {
+      font-family: 'Cinzel', serif;
+      font-weight: 600;
+      font-size: 1.4rem;
+      color: #dbb44b;
+      margin: 1.5rem 0 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card {
+      background: rgba(20, 30, 15, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 1.8rem;
+      padding: 1.2rem 1.8rem;
+      margin: 1.2rem 0;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.5);
+    }
+
+    ul, ol {
+      padding-left: 1.8rem;
+      margin: 0.8rem 0;
+    }
+
+    li {
+      margin: 0.45rem 0;
+    }
+
+    .tag {
+      background: #2d3a1c;
+      color: #f7e28c;
+      padding: 0.2rem 0.9rem;
+      border-radius: 2rem;
+      font-weight: 700;
+      font-size: 0.85rem;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      border: 1px solid #d4af37;
+      margin-right: 0.4rem;
+    }
+
+    .flow-container {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem 1rem;
+      background: #1b2a11;
+      border-radius: 2rem;
+      padding: 1.2rem 1.5rem;
+      margin: 1rem 0;
+      font-weight: 600;
+      color: #e9db9c;
+      border: 1px solid #5a7132;
+    }
+
+    .flow-step {
+      background: #2b4020;
+      padding: 0.4rem 1rem;
+      border-radius: 1.5rem;
+      color: #f5e7b3;
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .arrow {
+      color: #d4af37;
+      font-size: 1.4rem;
+      font-weight: bold;
+    }
+
+    .warn {
+      background: rgba(180, 70, 40, 0.2);
+      border-left: 5px solid #d9783b;
+      padding: 0.8rem 1.2rem;
+      border-radius: 0.9rem;
+      margin: 1.2rem 0;
+      color: #ffcf9a;
+      font-style: italic;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.7rem;
+    }
+
+    .warn::before {
+      content: "⚠️";
+      font-size: 1.3rem;
+      font-style: normal;
+    }
+
+    .character-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      margin: 0.8rem 0;
+    }
+
+    .char-badge {
+      background: #1e3012;
+      border: 1px solid #b4942e;
+      border-radius: 2rem;
+      padding: 0.3rem 1.2rem;
+      font-weight: 700;
+      color: #edd484;
+      font-family: 'Cinzel', serif;
+    }
+
+    .mini-game-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin: 1rem 0;
+    }
+
+    hr {
+      border: 0;
+      height: 2px;
+      background: linear-gradient(to right, transparent, #d4af37, transparent);
+      margin: 2rem 0 1rem;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 0.8rem;
+      }
+      .document {
+        padding: 1.5rem;
+      }
+      h1 {
+        font-size: 2.3rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="document">
+    <h1>СКВОЗЬ ЧАЩУ</h1>
+    <div class="subtitle">Party game • 4–8 игроков • Ананси ведёт игру</div>
+
+    <!-- Концепция -->
+    <h2>🕸️ Концепция</h2>
+    <div class="card">
+      <p><span class="tag">Большой экран</span> — сервер, <span class="tag">Телефоны</span> — контроллеры.</p>
+      <p>Локальная сеть, подключение по QR-коду. Ведущий — <strong>Ананси</strong>, паук-трикстер из африканской мифологии.</p>
+    </div>
+
+    <!-- Персонажи -->
+    <h2>🦎 Персонажи</h2>
+    <div class="card">
+      <div class="character-list">
+        <span class="char-badge">🕷️ Паук</span>
+        <span class="char-badge">🐸 Лягушка</span>
+        <span class="char-badge">🐍 Змея</span>
+        <span class="char-badge">🪲 Жук</span>
+        <span class="char-badge">🦎 Ящерица</span>
+      </div>
+      <p>У каждого одна пассивная способность, отражающая природу существа.</p>
+      <div class="warn">Не решено: конкретные пассивки</div>
+    </div>
+
+    <!-- Основной маршрут -->
+    <h2>🌿 Основной маршрут</h2>
+    <div class="card">
+      <p><span class="tag">15 точек</span>, финиш на 15-й. Количество вопросов ≠ шаги: не ответил — не продвинулся.</p>
+      <p><strong>Вопросы:</strong> один на большом экране для всех, отвечают на телефоне. Правильный ответ — шаг вперёд.</p>
+      <p><strong>Мини-игры:</strong> триггерятся, когда лидер доходит до точек <strong>3, 6, 9, 12</strong>. Ананси останавливает лидера, все замирают и играют. Чередование: короткая / длинная.</p>
+    </div>
+
+    <!-- Мини-игры -->
+    <h2>🎲 Мини-игры</h2>
+    <div class="mini-game-grid">
+      <div class="card">
+        <h3 style="margin-top:0;">⏳ Короткие</h3>
+        <ul>
+          <li><strong>Три тропинки</strong> (удача)</li>
+          <li><strong>Голосование про личность</strong></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0;">🐊 Длинные</h3>
+        <ul>
+          <li><strong>Шпион</strong> (не знает, что он шпион)</li>
+          <li><strong>История Ананси</strong> (придумай финал)</li>
+          <li><strong>Крокодил</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Система помех и помощи -->
+    <h2>⚡ Помехи для лидера</h2>
+    <div class="card">
+      <ul>
+        <li><span class="tag">3 шага</span> отрыв — лёгкие помехи на телефоне</li>
+        <li><span class="tag">4 шага</span> — сильнее</li>
+        <li><span class="tag">5+ шагов</span> — ещё сильнее + комментарии Ананси</li>
+        <li><span class="tag">8+ шагов</span> — пасхалка: Ананси смиряется и перестаёт мешать</li>
+      </ul>
+    </div>
+
+    <h2>🤝 Помощь отстающему</h2>
+    <div class="card">
+      <p>Отрыв от остальных <strong>6+ шагов</strong> — Ананси двигает на 1 шаг вперёд (максимум 2–3 раза за игру).</p>
+      <p>Если после помощи игрок отвечает неправильно — Ананси прекращает помогать.</p>
+    </div>
+
+    <!-- Финальная гонка -->
+    <h2>🏁 Финальная гонка</h2>
+    <div class="card">
+      <p><strong>Триггер:</strong> лидер достигает точки 15. Ананси открывает путь для всех.</p>
+      <p><strong>Поле 12 шагов.</strong> Стартовые позиции:</p>
+      <ul>
+        <li>🏅 Лидер(ы) — клетка 4</li>
+        <li>📍 Позиции 10–14 на маршруте — клетка 3</li>
+        <li>📍 Позиции 5–9 — клетка 2</li>
+        <li>📍 Позиции 1–4 — клетка 1</li>
+      </ul>
+      <p><strong>Механика:</strong> все отвечают одновременно. Первый правильный ответ — <strong>2 шага</strong>, остальные правильные — <strong>1 шаг</strong>. Помех нет, все на равных.</p>
+      <div class="warn">Не решено: как технически определяется «первый ответил» — нужна точная метка времени на сервере</div>
+    </div>
+
+    <!-- Флоу игры -->
+    <h2>🔄 Флоу игры</h2>
+    <div class="flow-container">
+      <span class="flow-step">LOBBY</span> <span class="arrow">→</span>
+      <span class="flow-step">CHARACTER SELECT</span> <span class="arrow">→</span>
+      <span class="flow-step">INTRO</span> <span class="arrow">→</span>
+      <span class="flow-step">QUESTION</span> <span class="arrow">↔</span>
+      <span class="flow-step">QUESTION RESULT</span> <span class="arrow">→</span>
+      <span class="flow-step">MINIGAME INTRO</span> <span class="arrow">→</span>
+      <span class="flow-step">MINIGAME</span> <span class="arrow">→</span>
+      <span class="flow-step">RESULT</span> <span class="arrow">→</span>
+      <span class="flow-step">FINAL RACE INTRO</span> <span class="arrow">→</span>
+      <span class="flow-step">FINAL RACE</span> <span class="arrow">→</span>
+      <span class="flow-step">WINNER</span>
+    </div>
+    <p style="font-size:0.9rem; margin-top:0.3rem; color:#b9af7c;">* Мини-игры вклиниваются по достижении лидером точек 3,6,9,12. Финальная гонка — после точки 15.</p>
+
+    <!-- Визуал -->
+    <h2>🎨 Визуал</h2>
+    <div class="card">
+      <p><span class="tag">Большой экран</span> — фон: тропинка в джунглях, уходящая вдаль (нейросеть / ассеты).<br>
+      Миникарта слева: извилистая тропинка, иконки персонажей, точки вопросов, ✦ мини-игр.<br>
+      Снизу — карточка с вопросом и вариантами. Декор: паутина Ананси, светлячки.</p>
+      <p><span class="tag">Телефон</span> — варианты ответов крупно. Помехи для лидера: скачущие ответы, перевёрнутый экран. Подсказка для отстающего.</p>
+      <p><strong>Шрифты:</strong> <span style="font-family:'Cinzel',serif;">Cinzel</span> для заголовков, <span style="font-family:'Nunito',sans-serif;">Nunito</span> для текста.</p>
+      <p><strong>Цвета:</strong> тёмно-зелёный фон, золотые акценты.</p>
+    </div>
+
+    <!-- Технический стек -->
+    <h2>🛠️ Технический стек</h2>
+    <div class="card">
+      <ul>
+        <li><strong>Бэкенд:</strong> Node.js + Socket.io</li>
+        <li><strong>Фронтенд:</strong> React</li>
+        <li><strong>Подключение:</strong> локальная сеть, QR-код с локальным IP</li>
+        <li><strong>Вопросы:</strong> локальный JSON</li>
+      </ul>
+    </div>
+
+    <!-- План разработки -->
+    <h2>📋 План разработки</h2>
+    <div class="card">
+      <ol>
+        <li><strong>Этап 1 — Скелет (1–2 нед.)</strong><br>Сервер, лобби, QR, выбор персонажа, один вопрос, позиции.</li>
+        <li><strong>Этап 2 — Основной маршрут (2–3 нед.)</strong><br>Цикл вопросов, миникарта, помехи, помощь, комментарии Ананси.</li>
+        <li><strong>Этап 3 — Мини-игры (2–3 нед.)</strong><br>Три тропинки, голосование, шпион, история, крокодил, триггеры.</li>
+        <li><strong>Этап 4 — Финальная гонка (1 нед.)</strong><br>Поле, стартовые позиции, механика первого ответа.</li>
+        <li><strong>Этап 5 — Полировка (2 нед.)</strong><br>Анимации, звуки, фон, пассивки, тестирование с живыми игроками.</li>
+      </ol>
+    </div>
+
+    <hr>
+
+    <!-- Нерешённые вопросы -->
+    <h2>❓ Нерешённые вопросы</h2>
+    <div class="card" style="border-color: #d9783b;">
+      <ul>
+        <li>🕸️ Пассивки персонажей</li>
+        <li>⏱️ Механика «первого ответа» в финале — метка времени на сервере или клиенте</li>
+        <li>🖼️ Финальный фон — нейронка, готовые ассеты или другое</li>
+        <li>🏎️ Механика финальной гонки — утверждена ли схема «первый правильный = 2 шага»</li>
+      </ul>
+    </div>
+
+    <div style="text-align: center; margin-top: 2.5rem; font-family: 'Cinzel', serif; color: #d4af37; opacity: 0.8;">
+      ✦ Ананси плетёт свою сеть ✦
+    </div>
+  </div>
+</body>
+</html>
