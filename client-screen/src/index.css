@@ -1,0 +1,38 @@
+:root {
+  --bg:        #040c05;
+  --border:    #1c3a1a;
+  --green-dim: #2a5a22;
+  --green:     #5a9a30;
+  --green-hi:  #8acc40;
+  --gold:      #c8a830;
+  --gold-hi:   #f0d060;
+  --text:      #d8f0b0;
+  --text-dim:  #7aaa50;
+  --text-dark: #3a6028;
+  --red:       #c84830;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', sans-serif;
+  height: 100vh;
+  overflow: hidden;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 10px rgba(200,168,48,0.3); }
+  50%       { box-shadow: 0 0 22px rgba(200,168,48,0.7); }
+}

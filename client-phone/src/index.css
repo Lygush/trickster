@@ -1,0 +1,74 @@
+:root {
+  --bg:        #040c05;
+  --border:    #1c3a1a;
+  --green-dim: #2a5a22;
+  --green:     #5a9a30;
+  --green-hi:  #8acc40;
+  --gold:      #c8a830;
+  --gold-hi:   #f0d060;
+  --text:      #d8f0b0;
+  --text-dim:  #7aaa50;
+  --text-dark: #3a6028;
+  --red:       #c84830;
+  --orange:    #c87830;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Nunito', sans-serif;
+  overscroll-behavior: none;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-8px) rotate(-2deg); }
+  40%       { transform: translateX(8px) rotate(2deg); }
+  60%       { transform: translateX(-6px); }
+  80%       { transform: translateX(6px); }
+}
+
+@keyframes flip {
+  0%   { transform: rotateX(0deg); }
+  50%  { transform: rotateX(90deg); }
+  100% { transform: rotateX(180deg); }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes bounceIn {
+  0%   { transform: scale(0.5); opacity: 0; }
+  70%  { transform: scale(1.1); }
+  100% { transform: scale(1);   opacity: 1; }
+}
