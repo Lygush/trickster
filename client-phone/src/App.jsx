@@ -2,13 +2,15 @@ import React, { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import './index.css';
 
-import JoinScreen       from './components/JoinScreen';
-import CharSelect       from './components/CharSelect';
-import WaitScreen       from './components/WaitScreen';
-import AnswerScreen     from './components/AnswerScreen';
-import ResultScreen     from './components/ResultScreen';
-import FinalRaceScreen  from './components/FinalRaceScreen';
-import ThreePathsPhone  from './components/ThreePathsPhone';
+import JoinScreen      from './components/JoinScreen';
+import CharSelect      from './components/CharSelect';
+import WaitScreen      from './components/WaitScreen';
+import AnswerScreen    from './components/AnswerScreen';
+import ResultScreen    from './components/ResultScreen';
+import FinalRaceScreen from './components/FinalRaceScreen';
+import MinigameIntro   from './components/MinigameIntro';
+
+import MINIGAMES from './minigames/index';
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || window.location.origin;
 
@@ -17,14 +19,14 @@ const CHAR_EMOJI = {
 };
 
 export default function App() {
-  const [joined,       setJoined]       = useState(false);
-  const [playerName,   setPlayerName]   = useState('');
-  const [error,        setError]        = useState('');
-  const [gameState,    setGameState]    = useState(null);
-  const [revealData,   setRevealData]   = useState(null);
-  const [myAnswer,     setMyAnswer]     = useState(null);
-  const [aanansiHelp,  setAanansiHelp]  = useState(false);
-  const [winner,       setWinner]       = useState(null);
+  const [joined,      setJoined]      = useState(false);
+  const [playerName,  setPlayerName]  = useState('');
+  const [error,       setError]       = useState('');
+  const [gameState,   setGameState]   = useState(null);
+  const [revealData,  setRevealData]  = useState(null);
+  const [myAnswer,    setMyAnswer]    = useState(null);
+  const [aanansiHelp, setAanansiHelp] = useState(false);
+  const [winner,      setWinner]      = useState(null);
 
   const socketRef = useRef(null);
   const myIdRef   = useRef(null);
@@ -33,13 +35,10 @@ export default function App() {
     const socket = io(SERVER_URL);
     socketRef.current = socket;
 
-    socket.on('connect', () => {
-      myIdRef.current = socket.id;
-    });
+    socket.on('connect', () => { myIdRef.current = socket.id; });
 
     socket.on('game_state', (state) => {
       setGameState(state);
-
       if (state.phase === 'question') {
         setMyAnswer(null);
         setRevealData(null);
@@ -52,9 +51,7 @@ export default function App() {
       if (mine) setMyAnswer(mine.answerIndex);
     });
 
-    socket.on('game_winner', (data) => {
-      setWinner(data.player);
-    });
+    socket.on('game_winner', (data) => { setWinner(data.player); });
 
     socket.on('error', ({ message }) => {
       setError(message);
@@ -82,21 +79,22 @@ export default function App() {
     socketRef.current?.emit('answer', { answerIndex });
   };
 
-  const handleThreePathsChoose = (pathIndex) => {
-    socketRef.current?.emit('three_paths_choose', { pathIndex });
+  // Универсальный emit для мини-игр: минигра сама знает какое событие слать
+  const handleMinigameEmit = (event, payload) => {
+    socketRef.current?.emit(event, payload);
   };
 
   // ── Derived state ─────────────────────────────────────────────────────────
 
-  const phase    = gameState?.phase   || 'lobby';
-  const players  = gameState?.players || [];
-  const myId     = myIdRef.current;
-  const me       = players.find(p => p.id === myId);
+  const phase   = gameState?.phase   || 'lobby';
+  const players = gameState?.players || [];
+  const myId    = myIdRef.current;
+  const me      = players.find(p => p.id === myId);
 
   const takenChars     = players.filter(p => p.id !== myId && p.character).map(p => p.character);
   const hindranceLevel = me?.hindranceLevel || 0;
 
-  const finalPositions = gameState?.finalRace?.positions || null;
+  const finalPositions = gameState?.finalRace?.positions  || null;
   const finalQuestion  = gameState?.finalRace?.currentQuestion || null;
   const myFinalPos     = finalPositions ? (finalPositions[myId] || 0) : 0;
 
@@ -105,11 +103,7 @@ export default function App() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!joined) {
-    return (
-      <PhoneShell>
-        <JoinScreen onJoin={handleJoin} error={error} />
-      </PhoneShell>
-    );
+    return <PhoneShell><JoinScreen onJoin={handleJoin} error={error} /></PhoneShell>;
   }
 
   if (phase === 'lobby' || phase === 'character_select') {
@@ -154,38 +148,42 @@ export default function App() {
     );
   }
 
-  // ── Мини-игры ──────────────────────────────────────────────────────────────
+  // ── Мини-игры ─────────────────────────────────────────────────────────────
+  //
+  // Всё что нужно знать App.jsx — есть ли PhoneView в реестре.
+  // Добавляя новую мини-игру, этот блок не трогаем.
 
   if (phase === 'minigame_intro') {
     return (
       <PhoneShell>
-        <WaitScreen phase={phase} player={me} players={players} />
+        <MinigameIntro minigame={currentMinigame} player={me} />
       </PhoneShell>
     );
   }
 
   if (phase === 'minigame') {
-    // three_paths — показываем интерактивный экран
-    if (currentMinigame?.id === 'three_paths') {
-      return (
-        <PhoneShell>
-          <ThreePathsPhone
+    const def       = MINIGAMES[currentMinigame?.id];
+    const PhoneView = def?.PhoneView ?? null;
+
+    return (
+      <PhoneShell>
+        {PhoneView ? (
+          <PhoneView
             key={currentMinigame.id}
             minigame={currentMinigame}
             myId={myId}
-            onChoose={handleThreePathsChoose}
+            me={me}
+            players={players}
+            onEmit={handleMinigameEmit}
           />
-        </PhoneShell>
-      );
-    }
-
-    // Остальные мини-игры (пока заглушка)
-    return (
-      <PhoneShell>
-        <WaitScreen phase={phase} player={me} players={players} />
+        ) : (
+          <WaitScreen phase={phase} player={me} players={players} />
+        )}
       </PhoneShell>
     );
   }
+
+  // ── Финальная гонка ───────────────────────────────────────────────────────
 
   if (phase === 'final_race' || phase === 'final_race_intro') {
     return (
@@ -226,15 +224,10 @@ export default function App() {
     );
   }
 
-  // Все остальные фазы: intro, etc.
-  return (
-    <PhoneShell>
-      <WaitScreen phase={phase} player={me} players={players} />
-    </PhoneShell>
-  );
+  return <PhoneShell><WaitScreen phase={phase} player={me} players={players} /></PhoneShell>;
 }
 
-// ── Обёртка с фоном ────────────────────────────────────────────────────────
+// ── Shell ──────────────────────────────────────────────────────────────────
 
 function PhoneShell({ children }) {
   return (
@@ -274,7 +267,7 @@ const errorStyle = {
   background: 'rgba(200,72,48,0.9)',
   color: '#fff', borderRadius: 10,
   padding: '10px 20px', fontSize: 13,
-  zIndex: 100, animation: 'fadeIn 0.3s ease',
+  zIndex: 100,
 };
 
 const winnerStyles = {
@@ -290,12 +283,6 @@ const winnerStyles = {
     textShadow: '0 0 20px rgba(200,168,48,0.5)',
     textAlign: 'center',
   },
-  sub: {
-    fontSize: 13, color: '#5a9a30',
-    textAlign: 'center', lineHeight: 1.5,
-  },
-  pos: {
-    fontSize: 12, color: '#3a6028',
-    marginTop: 8,
-  },
+  sub:  { fontSize: 13, color: '#5a9a30', textAlign: 'center', lineHeight: 1.5 },
+  pos:  { fontSize: 12, color: '#3a6028', marginTop: 8 },
 };
