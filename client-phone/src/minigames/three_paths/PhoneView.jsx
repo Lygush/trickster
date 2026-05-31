@@ -109,7 +109,7 @@ export default function ThreePathsPhone({ minigame, myId, onChoose }) {
                   borderColor:  PATH_BORDER[i],
                   color:        PATH_COLORS[i],
                 }}
-                onClick={() => onChoose(i)}
+                onClick={() => onChoose && typeof onChoose === 'function' && onChoose(i)}
               >
                 <span style={s.pathBtnIcon}>{PATH_ICONS[i]}</span>
                 <span style={s.pathBtnName}>{pathName}</span>
