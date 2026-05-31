@@ -1,24 +1,14 @@
 {
-  "name": "trickster-screen",
+  "name": "trickster-server",
   "version": "1.0.0",
-  "private": true,
-  "homepage": "/screen",
-  "dependencies": {
-    "ajv": "^8.12.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "5.0.1",
-    "socket.io-client": "^4.7.2"
-  },
-  "devDependencies": {
-    "cross-env": "^7.0.3"
-  },
+  "description": "Сервер для игры Trickster",
+  "main": "src/index.js",
   "scripts": {
-    "start": "cross-env REACT_APP_SERVER_URL=http://localhost:3001 DANGEROUSLY_DISABLE_HOST_CHECK=true react-scripts start",
-    "build": "cross-env REACT_APP_SERVER_URL= react-scripts build"
+    "start": "node src/index.js"
   },
-  "browserslist": {
-    "production": [">0.2%", "not dead", "not op_mini all"],
-    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.8.3",
+    "qrcode": "^1.5.3"
   }
 }
