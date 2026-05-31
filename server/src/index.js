@@ -13,6 +13,8 @@ const {
   checkAanansiHelp, updateHindrances, shuffle, publicState,
 } = require('./gameState');
 
+const { buildAssetsConfig, ASSETS_DIR } = require('./assetsConfig');
+
 const QUESTIONS_RAW = require('../data/questions.json');
 
 // ── Конфиг ───────────────────────────────────────────────────────────────────
@@ -40,6 +42,21 @@ app.get('/phone/*', (req, res) =>
   res.sendFile(path.join(PHONE_BUILD, 'index.html')));
 
 app.get('/', (req, res) => res.redirect('/screen'));
+
+// ── Статика ассетов ───────────────────────────────────────────────────────────
+// Все файлы из папки assets/ доступны по /assets/*
+// Папку создавать вручную не нужно — сервер просто не будет отдавать ничего,
+// пока файлы не появятся.
+const fs = require('fs');
+if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });
+app.use('/assets', express.static(ASSETS_DIR));
+
+// ── API: конфиг ассетов ───────────────────────────────────────────────────────
+// Клиенты запрашивают этот эндпоинт при старте и узнают, какие файлы есть.
+// Если файла нет — поле null, клиент использует встроенный fallback.
+app.get('/api/assets', (req, res) => {
+  res.json(buildAssetsConfig());
+});
 
 // ── QR-код ───────────────────────────────────────────────────────────────────
 app.get('/qr', async (req, res) => {
@@ -189,7 +206,6 @@ function endMinigame() {
 }
 
 // ── THREE PATHS ───────────────────────────────────────────────────────────────
-// Флавор-тексты для троп
 const PATH_FLAVORS = [
   ['Тропа теней', 'Путь сквозь туман', 'Тропа ветра'],
   ['Левая тропа', 'Средний путь', 'Правая тропа'],
@@ -200,22 +216,19 @@ const PATH_FLAVORS = [
 
 function startThreePaths() {
   const flavors  = PATH_FLAVORS[Math.floor(Math.random() * PATH_FLAVORS.length)];
-  const winPath  = Math.floor(Math.random() * 3); // 0, 1 или 2 — победная тропа
+  const winPath  = Math.floor(Math.random() * 3);
   const anansiLine = pickAanansiLine();
 
   game.currentMinigame.data = {
     paths: flavors,
-    winPath,           // скрыто от клиентов до reveal
-    choices: {},       // socketId → pathIndex (0/1/2)
+    winPath,
+    choices: {},
     revealed: false,
     anansiLine,
   };
 
-  // Отправляем состояние БЕЗ winPath
   broadcastState();
   log(`Three Paths: победная тропа = ${winPath} («${flavors[winPath]}»)`);
-
-  // Таймаут — если не все ответили за 20 сек, раскрываем
   game.answerTimer = setTimeout(() => revealThreePaths(), 20_000);
 }
 
@@ -252,7 +265,6 @@ function revealThreePaths() {
   updateHindrances(game);
   mg.phase = 'reveal';
 
-  // Теперь winPath открывается всем через publicState
   broadcastState();
 
   broadcast('three_paths_result', {
@@ -265,8 +277,6 @@ function revealThreePaths() {
   });
 
   log(`Three Paths reveal: победители = ${winners.length}`);
-
-  // Через 4 секунды продолжаем игру
   setTimeout(() => endMinigame(), 4_000);
 }
 
@@ -281,7 +291,14 @@ function startFinalRace() {
     else if (p.position >= 5)                                   startPositions[p.id] = 2;
     else                                                        startPositions[p.id] = 1;
   });
-  game.finalRace = { positions: startPositions, answers: {}, questionIdx: 0, questions: shuffle(QUESTIONS_RAW), finished: false };
+  game.finalRace = {
+    positions: startPositions,
+    answers: {},
+    questionIdx: 0,
+    questions: shuffle(QUESTIONS_RAW),
+    finished: false,
+    firstAnswer: null,  // определяется по первому ПРАВИЛЬНОМУ ответу
+  };
   game.phase = 'final_race_intro';
   log('Финальная гонка!');
   broadcastState();
@@ -292,7 +309,7 @@ function startFinalQuestion() {
   const fr = game.finalRace;
   if (fr.finished) return;
   fr.currentQuestion = fr.questions[fr.questionIdx++ % fr.questions.length];
-  fr.answers = {};
+  fr.answers    = {};
   fr.firstAnswer = null;
   log('Финал. Вопрос:', fr.currentQuestion.text);
   broadcastState();
@@ -303,15 +320,31 @@ function revealFinalAnswers() {
   clearTimeout(game.answerTimer);
   const fr      = game.finalRace;
   const correct = fr.currentQuestion.correct;
+
+  // ── БАГИ-ФИX: firstAnswer — первый среди ПРАВИЛЬНЫХ, по timestamp ─────────
+  // Раньше firstAnswer = первый кто нажал (независимо от правильности).
+  // Теперь: сначала находим правильные ответы, потом из них — самый ранний.
+  let firstCorrectSid  = null;
+  let firstCorrectTime = Infinity;
+
   Object.entries(fr.answers).forEach(([pid, ans]) => {
-    if (ans.answerIndex === correct) {
-      const steps = fr.firstAnswer === pid ? 2 : 1;
-      fr.positions[pid] = (fr.positions[pid] || 0) + steps;
-      log(`${game.players[pid]?.name} +${steps}`);
+    if (ans.answerIndex === correct && ans.timestamp < firstCorrectTime) {
+      firstCorrectTime = ans.timestamp;
+      firstCorrectSid  = pid;
     }
   });
+
+  Object.entries(fr.answers).forEach(([pid, ans]) => {
+    if (ans.answerIndex === correct) {
+      const steps = firstCorrectSid === pid ? 2 : 1;
+      fr.positions[pid] = (fr.positions[pid] || 0) + steps;
+      log(`${game.players[pid]?.name} +${steps} (${firstCorrectSid === pid ? 'первый!' : 'верно'})`);
+    }
+  });
+
   const winner = Object.entries(fr.positions).find(([, pos]) => pos >= FINAL_STEPS);
   if (winner) {
+    fr.finished = true;
     game.phase = 'winner';
     const winnerPlayer = game.players[winner[0]];
     log('Победитель:', winnerPlayer?.name);
@@ -384,7 +417,7 @@ io.on('connection', socket => {
       const fr = game.finalRace;
       if (fr.answers[sid]) return;
       fr.answers[sid] = { answerIndex, timestamp: Date.now() };
-      if (!fr.firstAnswer) fr.firstAnswer = sid;
+      // firstAnswer теперь определяется в revealFinalAnswers по правильности
       const connected = getPlayers(game).filter(p => p.connected);
       if (Object.keys(fr.answers).length >= connected.length) {
         clearTimeout(game.answerTimer);
@@ -403,15 +436,12 @@ io.on('connection', socket => {
     if (typeof pathIndex !== 'number' || pathIndex < 0 || pathIndex > 2) return;
 
     const data = game.currentMinigame.data;
-    if (data.choices[sid] !== undefined) return; // уже выбрал
+    if (data.choices[sid] !== undefined) return;
 
     data.choices[sid] = pathIndex;
     log(`${player.name} выбрал тропу ${pathIndex}`);
-
-    // Сообщаем всем об обновлении выборов (без winPath)
     broadcastState();
 
-    // Если все подключённые игроки выбрали — раскрываем
     const connected = getPlayers(game).filter(p => p.connected);
     if (Object.keys(data.choices).length >= connected.length) {
       clearTimeout(game.answerTimer);
@@ -441,6 +471,12 @@ io.on('connection', socket => {
 // ── Запуск ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIP();
+  const assetsConfig = buildAssetsConfig();
+  const assetsLoaded = Object.values(assetsConfig.backgrounds).filter(Boolean).length
+    + Object.values(assetsConfig.characters).filter(Boolean).length
+    + Object.values(assetsConfig.sounds.music).filter(Boolean).length
+    + Object.values(assetsConfig.sounds.sfx).filter(Boolean).length;
+
   console.log(`
 ╔══════════════════════════════════════════╗
 ║        🕸️  СКВОЗЬ ЧАЩУ — СЕРВЕР  🕸️       ║
@@ -449,6 +485,9 @@ server.listen(PORT, '0.0.0.0', () => {
 ║  Телефоны      → http://${ip}:${PORT}/phone
 ║  QR-код        → http://${ip}:${PORT}/qr
 ║  Статус        → http://${ip}:${PORT}/status
+║  Ассеты API    → http://${ip}:${PORT}/api/assets
+╠══════════════════════════════════════════╣
+║  Ассетов загружено: ${assetsLoaded} файлов
 ╚══════════════════════════════════════════╝
   `);
 });

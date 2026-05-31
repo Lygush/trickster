@@ -136,6 +136,24 @@ function publicState(game) {
     }
   }
 
+  // ── БАГИ-ФИX: finalRace не отдаём questions клиентам ─────────────────────
+  // Раньше весь объект finalRace шёл к клиенту, включая массив questions —
+  // это давало возможность посмотреть все будущие вопросы через DevTools.
+  let finalRacePublic = null;
+  if (game.finalRace) {
+    const fr = game.finalRace;
+    finalRacePublic = {
+      positions: fr.positions,
+      finished:  fr.finished,
+      // currentQuestion — только текущий, без correct
+      currentQuestion: fr.currentQuestion ? {
+        id:      fr.currentQuestion.id,
+        text:    fr.currentQuestion.text,
+        answers: fr.currentQuestion.answers,
+      } : null,
+    };
+  }
+
   return {
     phase: game.phase,
     players: getPlayers(game).map(p => ({
@@ -154,7 +172,7 @@ function publicState(game) {
         }
       : null,
     currentMinigame: minigamePublic,
-    finalRace:       game.finalRace,
+    finalRace:       finalRacePublic,
   };
 }
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import './index.css';
 
-import JungleScene   from './components/JungleScene';
+import GameBackground from './components/GameBackground';   // ← заменяет JungleScene
 import LobbyScreen   from './components/LobbyScreen';
 import MapPanel      from './components/MapPanel';
 import ProgressStrip from './components/ProgressStrip';
@@ -11,6 +11,9 @@ import WinnerScreen  from './components/WinnerScreen';
 import MinigameIntro from './components/MinigameIntro';
 
 import MINIGAMES from './minigames/index';
+
+import useAssets from './hooks/useAssets';   // ← система ассетов
+import useSounds from './hooks/useSounds';   // ← система звуков
 
 const SERVER_URL = process.env.REACT_APP_SERVER_URL || window.location.origin;
 
@@ -23,7 +26,15 @@ export default function App() {
   const [qrUrl,       setQrUrl]       = useState(null);
   const [questionNum, setQuestionNum] = useState(0);
 
-  const socketRef = useRef(null);
+  const socketRef       = useRef(null);
+  // ── БАГФИКС: отслеживаем id последнего вопроса, чтобы не инкрементить
+  // questionNum на каждый game_state (а их приходит N штук — по одному за
+  // каждый ответ игрока).
+  const lastQuestionId  = useRef(null);
+
+  // ── Ассеты и звуки ────────────────────────────────────────────────────────
+  const assets = useAssets();
+  const sounds = useSounds(assets);
 
   useEffect(() => {
     const socket = io(SERVER_URL);
@@ -33,10 +44,36 @@ export default function App() {
 
     socket.on('game_state', (state) => {
       setGameState(state);
+
       if (state.phase === 'question') {
         setRevealData(null);
         setAnswers({});
-        setQuestionNum(n => n + 1);
+
+        // ── БАГФИКС: инкрементим только при смене вопроса ─────────────────
+        const qid = state.currentQuestion?.id;
+        if (qid && qid !== lastQuestionId.current) {
+          lastQuestionId.current = qid;
+          setQuestionNum(n => n + 1);
+          // Звук начала нового вопроса
+          sounds.playSfx('tick');
+        }
+      }
+
+      // ── Музыка по фазе ────────────────────────────────────────────────────
+      const musicMap = {
+        lobby:            'lobby',
+        character_select: 'lobby',
+        intro:            'lobby',
+        question:         'question',
+        question_result:  'question',
+        minigame_intro:   'minigame',
+        minigame:         'minigame',
+        final_race_intro: 'final_race',
+        final_race:       'final_race',
+        winner:           'winner',
+      };
+      if (musicMap[state.phase]) {
+        sounds.playMusic(musicMap[state.phase]);
       }
     });
 
@@ -45,12 +82,19 @@ export default function App() {
     socket.on('question_result', (data) => {
       setRevealData(data);
       setAnswers(data.answers || {});
+
+      // SFX на результат (играем для всех — correct если кто-то ответил верно)
+      const anyCorrect = data.moved?.length > 0;
+      sounds.playSfx(anyCorrect ? 'correct' : 'wrong');
     });
 
-    socket.on('game_winner', (data) => { setWinner(data.player); });
+    socket.on('game_winner', (data) => {
+      setWinner(data.player);
+      sounds.playSfx('winner');
+    });
 
     return () => socket.disconnect();
-  }, []);
+  }, []); // eslint-disable-line
 
   const handleStart = () => socketRef.current?.emit('start_game');
   const handleReset = () => {
@@ -59,6 +103,8 @@ export default function App() {
     setRevealData(null);
     setAnswers({});
     setQuestionNum(0);
+    lastQuestionId.current = null;
+    sounds.stopMusic();
   };
 
   const phase   = gameState?.phase   || 'lobby';
@@ -70,11 +116,17 @@ export default function App() {
 
   return (
     <div style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <JungleScene />
+
+      {/* ── Фон: изображение или SVG-джунгли ── */}
+      <GameBackground
+        phase={phase}
+        minigameId={currentMinigame?.id}
+        assets={assets}
+      />
 
       <div style={styles.layout}>
 
-        {showMap && <MapPanel players={players} />}
+        {showMap && <MapPanel players={players} assets={assets} />}
 
         <div style={styles.mainPanel}>
           {/* Web deco */}
@@ -91,7 +143,13 @@ export default function App() {
 
           {/* LOBBY */}
           {(phase === 'lobby' || phase === 'character_select') && (
-            <LobbyScreen players={players} qrUrl={qrUrl} serverInfo={serverInfo} onStart={handleStart} />
+            <LobbyScreen
+              players={players}
+              qrUrl={qrUrl}
+              serverInfo={serverInfo}
+              onStart={handleStart}
+              assets={assets}
+            />
           )}
 
           {/* INTRO */}
@@ -122,6 +180,7 @@ export default function App() {
                   revealData={phase === 'question_result' ? revealData : null}
                   questionIndex={questionNum}
                   leaderPosition={leader?.position || 0}
+                  assets={assets}
                 />
               </div>
             </>
@@ -132,12 +191,18 @@ export default function App() {
             <MinigameIntro minigame={currentMinigame} />
           )}
 
-          {/* MINIGAME — только реестр, никаких if по id */}
+          {/* MINIGAME */}
           {phase === 'minigame' && (() => {
             const def        = MINIGAMES[currentMinigame?.id];
             const ScreenView = def?.ScreenView ?? null;
             return ScreenView
-              ? <ScreenView key={currentMinigame.id} minigame={currentMinigame} players={players} />
+              ? <ScreenView
+                  key={currentMinigame.id}
+                  minigame={currentMinigame}
+                  players={players}
+                  assets={assets}
+                  sounds={sounds}
+                />
               : <MinigameIntro minigame={currentMinigame} waiting />;
           })()}
 
@@ -156,13 +221,7 @@ export default function App() {
                 <div style={styles.finalPositions}>
                   {players.map(p => (
                     <div key={p.id} style={styles.finalPosRow}>
-                      <span style={{ fontSize: 22 }}>
-                        {p.character === 'spider' ? '🕷️'
-                          : p.character === 'frog'   ? '🐸'
-                          : p.character === 'snake'  ? '🐍'
-                          : p.character === 'beetle' ? '🪲'
-                          : '🦎'}
-                      </span>
+                      <CharAvatar character={p.character} assets={assets} size={22} />
                       <span style={{ color: '#d8f0b0', fontSize: 14 }}>{p.name}</span>
                       <div style={styles.finalBar}>
                         <div style={{
@@ -182,7 +241,7 @@ export default function App() {
 
           {/* WINNER */}
           {phase === 'winner' && (
-            <WinnerScreen winner={winner} players={players} onReset={handleReset} />
+            <WinnerScreen winner={winner} players={players} onReset={handleReset} assets={assets} />
           )}
         </div>
       </div>
@@ -190,6 +249,31 @@ export default function App() {
   );
 }
 
+// ── Вспомогательный компонент: аватар персонажа ──────────────────────────────
+// Показывает картинку из assets если есть, иначе emoji
+export function CharAvatar({ character, assets, size = 32, style = {} }) {
+  const CHAR_EMOJI = {
+    spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎',
+  };
+  const imgUrl = character ? assets?.characters?.[character] : null;
+
+  if (imgUrl) {
+    return (
+      <img
+        src={imgUrl}
+        alt={character}
+        style={{ width: size, height: size, objectFit: 'contain', ...style }}
+      />
+    );
+  }
+  return (
+    <span style={{ fontSize: size * 0.8, lineHeight: 1, ...style }}>
+      {CHAR_EMOJI[character] || '⭕'}
+    </span>
+  );
+}
+
+// ── Стили ─────────────────────────────────────────────────────────────────────
 const styles = {
   layout: {
     display: 'flex', flex: 1, position: 'relative',
