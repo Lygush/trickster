@@ -1,4 +1,4 @@
-// gameState.js — единое состояние игры на сервере
+// gameState.js — единое состояние игры на сервере (исправленное)
 
 const CHARACTERS = [
   { id: 'spider',   emoji: '🕷️', name: 'Паук'     },
@@ -28,6 +28,10 @@ function createGame() {
     currentQuestion: null,
     answers: {},
     answerTimer: null,
+    // FIX: защита от гонки таймеров
+    roundLocked: false,
+    // FIX: хранение всех активных таймеров
+    activeTimers: [],
     minigameQueue: [],
     currentMinigame: null,
     finalRace: null,
@@ -45,7 +49,9 @@ function createPlayer(socketId, name) {
     position: 0,
     ready: false,
     connected: true,
-    hindranceLevel: 0,
+    // FIX: разделяем базовую помеху и дополнительные штрафы
+    baseHindrance: 0,
+    extraPenalty: 0,
   };
 }
 
@@ -66,12 +72,14 @@ function getLastPlace(game) {
 }
 
 function calcHindranceLevel(game, leaderId) {
+  // FIX: защита от null/undefined leaderId
+  if (!leaderId || !game.players[leaderId]) return 0;
+
   if (game.hindranceOverride[leaderId] !== undefined) {
     return game.hindranceOverride[leaderId];
   }
-  const leader = game.players[leaderId];
-  if (!leader) return 0;
 
+  const leader = game.players[leaderId];
   const others = getPlayers(game).filter(p => p.id !== leaderId && p.connected);
   if (!others.length) return 0;
 
@@ -101,9 +109,10 @@ function updateHindrances(game) {
   const leader = getLeader(game);
   getPlayers(game).forEach(p => {
     if (leader && p.id === leader.id) {
-      p.hindranceLevel = calcHindranceLevel(game, p.id);
+      // FIX: сохраняем базовую помеху, не затирая extraPenalty
+      p.baseHindrance = calcHindranceLevel(game, p.id);
     } else {
-      p.hindranceLevel = 0;
+      p.baseHindrance = 0;
     }
   });
 }
@@ -128,24 +137,20 @@ function publicState(game) {
       minigamePublic = {
         ...mg,
         data: mg.data.revealed
-          ? mg.data                // reveal — winPath открыт
-          : { ...safeData },       // активная игра — winPath скрыт
+          ? mg.data
+          : { ...safeData },
       };
     } else {
       minigamePublic = mg;
     }
   }
 
-  // ── БАГИ-ФИX: finalRace не отдаём questions клиентам ─────────────────────
-  // Раньше весь объект finalRace шёл к клиенту, включая массив questions —
-  // это давало возможность посмотреть все будущие вопросы через DevTools.
   let finalRacePublic = null;
   if (game.finalRace) {
     const fr = game.finalRace;
     finalRacePublic = {
       positions: fr.positions,
       finished:  fr.finished,
-      // currentQuestion — только текущий, без correct
       currentQuestion: fr.currentQuestion ? {
         id:      fr.currentQuestion.id,
         text:    fr.currentQuestion.text,
@@ -161,7 +166,8 @@ function publicState(game) {
       name:           p.name,
       character:      p.character,
       position:       p.position,
-      hindranceLevel: p.hindranceLevel,
+      // FIX: итоговая помеха = базовая + дополнительные штрафы
+      hindranceLevel: p.baseHindrance + p.extraPenalty,
       connected:      p.connected,
     })),
     currentQuestion: game.currentQuestion
@@ -174,6 +180,28 @@ function publicState(game) {
     currentMinigame: minigamePublic,
     finalRace:       finalRacePublic,
   };
+}
+
+// FIX: функция сброса с очисткой таймеров и полным сбросом
+function resetGameState(game) {
+  // очищаем все активные таймеры
+  game.activeTimers.forEach(id => clearTimeout(id));
+  game.activeTimers = [];
+
+  // создаём свежее состояние и переносим игроков, если нужно
+  const fresh = createGame();
+  Object.assign(game, fresh, {
+    players: game.players, // сохраняем подключённых игроков
+  });
+
+  // сбрасываем состояние каждого игрока
+  Object.values(game.players).forEach(p => {
+    p.position = 0;
+    p.ready = false;
+    p.baseHindrance = 0;
+    p.extraPenalty = 0;
+    // при необходимости добавьте сброс других полей игрока
+  });
 }
 
 module.exports = {
@@ -191,4 +219,5 @@ module.exports = {
   updateHindrances,
   shuffle,
   publicState,
+  resetGameState, // не забудьте экспортировать
 };

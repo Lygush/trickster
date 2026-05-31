@@ -1,4 +1,4 @@
-// index.js — точка входа, Express + Socket.io
+// index.js — точка входа, Express + Socket.io (ИСПРАВЛЕНО: 9 багов)
 
 const express    = require('express');
 const http       = require('http');
@@ -18,9 +18,11 @@ const { buildAssetsConfig, ASSETS_DIR } = require('./assetsConfig');
 const QUESTIONS_RAW = require('../data/questions.json');
 
 // ── Конфиг ───────────────────────────────────────────────────────────────────
-const PORT           = process.env.PORT || 3001;
-const ANSWER_TIMEOUT = 20_000;
-const RESULT_PAUSE   = 3_000;
+const PORT             = process.env.PORT || 3001;
+const ANSWER_TIMEOUT   = 20_000;
+const RESULT_PAUSE     = 3_000;
+// Баг #5: добавлена обработка MINIGAME_TIMEOUT с fallback
+const MINIGAME_TIMEOUT = parseInt(process.env.MINIGAME_TIMEOUT, 10) || 20_000;
 
 // ── Приложение ───────────────────────────────────────────────────────────────
 const app    = express();
@@ -43,17 +45,12 @@ app.get('/phone/*', (req, res) =>
 
 app.get('/', (req, res) => res.redirect('/screen'));
 
-// ── Статика ассетов ───────────────────────────────────────────────────────────
-// Все файлы из папки assets/ доступны по /assets/*
-// Папку создавать вручную не нужно — сервер просто не будет отдавать ничего,
-// пока файлы не появятся.
+// ── Статика ассетов ──────────────────────────────────────────────────────────
 const fs = require('fs');
 if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });
 app.use('/assets', express.static(ASSETS_DIR));
 
-// ── API: конфиг ассетов ───────────────────────────────────────────────────────
-// Клиенты запрашивают этот эндпоинт при старте и узнают, какие файлы есть.
-// Если файла нет — поле null, клиент использует встроенный fallback.
+// ── API: конфиг ассетов ──────────────────────────────────────────────────────
 app.get('/api/assets', (req, res) => {
   res.json(buildAssetsConfig());
 });
@@ -73,10 +70,10 @@ app.get('/qr', async (req, res) => {
 app.get('/status', (req, res) =>
   res.json({ ok: true, phase: game.phase, players: getPlayers(game).length }));
 
-// ── Состояние игры ────────────────────────────────────────────────────────────
+// ── Состояние игры ───────────────────────────────────────────────────────────
 let game = createGame();
 
-// ── Утилиты ───────────────────────────────────────────────────────────────────
+// ── Утилиты ──────────────────────────────────────────────────────────────────
 function getLocalIP() {
   const ifaces = os.networkInterfaces();
   const candidates = [];
@@ -95,7 +92,20 @@ const broadcast      = (event, data) => io.emit(event, data);
 const broadcastState = ()            => broadcast('game_state', publicState(game));
 const log            = (...args)     => console.log('[SERVER]', ...args);
 
-// ── Логика вопроса ────────────────────────────────────────────────────────────
+// ── Таймеры для безопасного сброса (баг #9) ─────────────────────────────────
+let answerTimerId      = null;
+let minigameIntroTimer = null;
+let minigameTimerId    = null;
+let resultPauseTimer   = null;   // универсальный таймер пауз (question_result, etc.)
+
+function clearAllTimers() {
+  if (answerTimerId)      { clearTimeout(answerTimerId);      answerTimerId      = null; }
+  if (minigameIntroTimer) { clearTimeout(minigameIntroTimer); minigameIntroTimer = null; }
+  if (minigameTimerId)    { clearTimeout(minigameTimerId);    minigameTimerId    = null; }
+  if (resultPauseTimer)   { clearTimeout(resultPauseTimer);   resultPauseTimer   = null; }
+}
+
+// ── Логика вопроса ───────────────────────────────────────────────────────────
 function startQuestion() {
   if (game.questionIndex >= game.questions.length) {
     game.questions     = shuffle(QUESTIONS_RAW);
@@ -104,30 +114,40 @@ function startQuestion() {
   game.currentQuestion = game.questions[game.questionIndex++];
   game.answers         = {};
   game.phase           = 'question';
+  game.answeringInProgress = false;   // баг #3: флаг для защиты от повторного вызова
   log('Вопрос:', game.currentQuestion.text);
   broadcastState();
-  game.answerTimer = setTimeout(() => revealAnswers(), ANSWER_TIMEOUT);
+  answerTimerId = setTimeout(() => revealAnswers(), ANSWER_TIMEOUT);
 }
 
 function revealAnswers() {
-  clearTimeout(game.answerTimer);
+  // Баг #3: защита от двойного вызова из-за гонки таймера
+  if (game.answeringInProgress) return;
+  game.answeringInProgress = true;
+
+  clearTimeout(answerTimerId);
+  answerTimerId = null;
   game.phase = 'question_result';
   broadcastState();
-  const correct = game.currentQuestion.correct;
+
+  // Баг #1: приводим к числу, потому что JSON может содержать строку
+  const correct = Number(game.currentQuestion.correct);
   const moved   = [];
 
   getPlayers(game).forEach(p => {
     const ans = game.answers[p.id];
-    if (ans && ans.answerIndex === correct) {
+    if (ans && Number(ans.answerIndex) === correct) {
       p.position = Math.min(p.position + 1, ROUTE_LENGTH);
       moved.push(p.id);
     } else if (!ans) {
       if (checkAanansiHelp(game, p.id)) {
         game.aanansiHelpsCount[p.id] = (game.aanansiHelpsCount[p.id] || 0) + 1;
         p.position = Math.min(p.position + 1, ROUTE_LENGTH);
+        // Баг #7: флаг должен сбрасываться после использования помощи
+        game.aanansiHelpActive[p.id] = false;
         log(`Ананси помогает ${p.name} (${game.aanansiHelpsCount[p.id]})`);
       }
-    } else if (ans.answerIndex !== correct) {
+    } else if (Number(ans.answerIndex) !== correct) {
       game.aanansiHelpActive[p.id] = false;
     }
   });
@@ -145,7 +165,8 @@ function revealAnswers() {
     })),
   });
 
-  setTimeout(() => {
+  resultPauseTimer = setTimeout(() => {
+    resultPauseTimer = null;
     if      (nextPhase === 'final_race') startFinalRace();
     else if (nextPhase === 'minigame')   startMinigameIntro();
     else                                 startQuestion();
@@ -185,27 +206,33 @@ function startMinigameIntro() {
   log('Мини-игра (интро):', id);
   broadcastState();
 
-  setTimeout(() => {
+  minigameIntroTimer = setTimeout(() => {
+    minigameIntroTimer = null;
     game.phase = 'minigame';
     game.currentMinigame.phase = 'active';
 
     if (id === 'three_paths') {
       startThreePaths();
     } else {
-      // Заглушка для остальных
+      // Заглушка для остальных — тоже с таймаутом (баг #4)
       broadcastState();
-      setTimeout(() => endMinigame(), 5_000);
+      minigameTimerId = setTimeout(() => {
+        minigameTimerId = null;
+        endMinigame();
+      }, MINIGAME_TIMEOUT);
     }
   }, 3_000);
 }
 
 function endMinigame() {
+  clearTimeout(minigameTimerId);
+  minigameTimerId = null;
   game.currentMinigame = null;
   log('Мини-игра завершена');
   startQuestion();
 }
 
-// ── THREE PATHS ───────────────────────────────────────────────────────────────
+// ── THREE PATHS ──────────────────────────────────────────────────────────────
 const PATH_FLAVORS = [
   ['Тропа теней', 'Путь сквозь туман', 'Тропа ветра'],
   ['Левая тропа', 'Средний путь', 'Правая тропа'],
@@ -229,7 +256,8 @@ function startThreePaths() {
 
   broadcastState();
   log(`Three Paths: победная тропа = ${winPath} («${flavors[winPath]}»)`);
-  game.answerTimer = setTimeout(() => revealThreePaths(), 20_000);
+  // Баг #4: теперь используем общий MINIGAME_TIMEOUT
+  answerTimerId = setTimeout(() => revealThreePaths(), MINIGAME_TIMEOUT);
 }
 
 const ANANSI_LINES = [
@@ -245,7 +273,8 @@ function pickAanansiLine() {
 }
 
 function revealThreePaths() {
-  clearTimeout(game.answerTimer);
+  clearTimeout(answerTimerId);
+  answerTimerId = null;
   const mg   = game.currentMinigame;
   if (!mg || mg.id !== 'three_paths') return;
 
@@ -277,10 +306,13 @@ function revealThreePaths() {
   });
 
   log(`Three Paths reveal: победители = ${winners.length}`);
-  setTimeout(() => endMinigame(), 4_000);
+  resultPauseTimer = setTimeout(() => {
+    resultPauseTimer = null;
+    endMinigame();
+  }, 4_000);
 }
 
-// ── Финальная гонка ───────────────────────────────────────────────────────────
+// ── Финальная гонка ──────────────────────────────────────────────────────────
 function startFinalRace() {
   const players = getPlayers(game);
   const leader  = getLeader(game);
@@ -297,66 +329,88 @@ function startFinalRace() {
     questionIdx: 0,
     questions: shuffle(QUESTIONS_RAW),
     finished: false,
-    firstAnswer: null,  // определяется по первому ПРАВИЛЬНОМУ ответу
+    winnerDeclared: false,   // баг #6: флаг, чтобы не объявить двух победителей
   };
   game.phase = 'final_race_intro';
   log('Финальная гонка!');
   broadcastState();
-  setTimeout(() => { game.phase = 'final_race'; broadcastState(); startFinalQuestion(); }, 4_000);
+  resultPauseTimer = setTimeout(() => {
+    resultPauseTimer = null;
+    game.phase = 'final_race';
+    broadcastState();
+    startFinalQuestion();
+  }, 4_000);
 }
 
 function startFinalQuestion() {
   const fr = game.finalRace;
-  if (fr.finished) return;
+  if (fr.finished || fr.winnerDeclared) return;   // баг #6: дополнительная защита
   fr.currentQuestion = fr.questions[fr.questionIdx++ % fr.questions.length];
   fr.answers    = {};
   fr.firstAnswer = null;
   log('Финал. Вопрос:', fr.currentQuestion.text);
   broadcastState();
-  game.answerTimer = setTimeout(() => revealFinalAnswers(), ANSWER_TIMEOUT);
+  answerTimerId = setTimeout(() => revealFinalAnswers(), ANSWER_TIMEOUT);
 }
 
 function revealFinalAnswers() {
-  clearTimeout(game.answerTimer);
+  clearTimeout(answerTimerId);
+  answerTimerId = null;
   const fr      = game.finalRace;
-  const correct = fr.currentQuestion.correct;
+  if (fr.finished || fr.winnerDeclared) return;
 
-  // ── БАГИ-ФИX: firstAnswer — первый среди ПРАВИЛЬНЫХ, по timestamp ─────────
-  // Раньше firstAnswer = первый кто нажал (независимо от правильности).
-  // Теперь: сначала находим правильные ответы, потом из них — самый ранний.
+  // Баг #1: приводим к числу
+  const correct = Number(fr.currentQuestion.correct);
+
+  // ── Первый правильный ответ по timestamp ─────────────────────────────────
   let firstCorrectSid  = null;
   let firstCorrectTime = Infinity;
 
   Object.entries(fr.answers).forEach(([pid, ans]) => {
-    if (ans.answerIndex === correct && ans.timestamp < firstCorrectTime) {
+    if (Number(ans.answerIndex) === correct && ans.timestamp < firstCorrectTime) {
       firstCorrectTime = ans.timestamp;
       firstCorrectSid  = pid;
     }
   });
 
   Object.entries(fr.answers).forEach(([pid, ans]) => {
-    if (ans.answerIndex === correct) {
-      const steps = firstCorrectSid === pid ? 2 : 1;
+    if (Number(ans.answerIndex) === correct) {
+      const steps = (firstCorrectSid === pid) ? 2 : 1;
       fr.positions[pid] = (fr.positions[pid] || 0) + steps;
-      log(`${game.players[pid]?.name} +${steps} (${firstCorrectSid === pid ? 'первый!' : 'верно'})`);
+      log(`${game.players[pid]?.name} +${steps} ${firstCorrectSid === pid ? '(первый!)' : '(верно)'}`);
     }
   });
 
-  const winner = Object.entries(fr.positions).find(([, pos]) => pos >= FINAL_STEPS);
-  if (winner) {
+  // Баг #6: один победитель – выбираем по max steps, затем по времени ответа
+  const finishing = Object.entries(fr.positions)
+    .filter(([, pos]) => pos >= FINAL_STEPS)
+    .sort((a, b) => {
+      if (b[1] !== a[1]) return b[1] - a[1];               // больше шагов первее
+      const ta = fr.answers[a[0]]?.timestamp || Infinity;
+      const tb = fr.answers[b[0]]?.timestamp || Infinity;
+      return ta - tb;                                      // раньше ответивший
+    });
+
+  if (finishing.length > 0) {
+    const [winnerId] = finishing[0];
+    fr.winnerDeclared = true;
     fr.finished = true;
     game.phase = 'winner';
-    const winnerPlayer = game.players[winner[0]];
+    const winnerPlayer = game.players[winnerId];
     log('Победитель:', winnerPlayer?.name);
     broadcast('game_winner', { player: winnerPlayer, finalPositions: fr.positions });
     broadcastState();
     return;
   }
+
   broadcastState();
-  setTimeout(() => startFinalQuestion(), RESULT_PAUSE);
+  resultPauseTimer = setTimeout(() => {
+    resultPauseTimer = null;
+    startFinalQuestion();
+  }, RESULT_PAUSE);
 }
 
-// ── Socket.io ─────────────────────────────────────────────────────────────────
+// ── Socket.io ────────────────────────────────────────────────────────────────
 io.on('connection', socket => {
   const sid = socket.id;
   log(`Подключился: ${sid}`);
@@ -386,7 +440,12 @@ io.on('connection', socket => {
     broadcastState();
   });
 
+  // Баг #2: защита от двойного старта
   socket.on('start_game', () => {
+    if (game.phase !== 'lobby' && game.phase !== 'character_select') {
+      socket.emit('error', { message: 'Игра уже началась' });
+      return;
+    }
     const players = getPlayers(game);
     if (players.length < 2)               { socket.emit('error', { message: 'Нужно минимум 2 игрока' }); return; }
     if (!players.every(p => p.character)) { socket.emit('error', { message: 'Не все выбрали персонажа' }); return; }
@@ -395,11 +454,15 @@ io.on('connection', socket => {
     game.phase         = 'intro';
     log('Игра стартует!');
     broadcastState();
-    setTimeout(() => startQuestion(), 3_000);
+    resultPauseTimer = setTimeout(() => {
+      resultPauseTimer = null;
+      startQuestion();
+    }, 3_000);
   });
 
   socket.on('answer', ({ answerIndex }) => {
     const player = game.players[sid];
+    // Баг #1: теперь answerIndex всегда число (клиент шлёт число, мы проверяем)
     if (!player || typeof answerIndex !== 'number') return;
 
     if (game.phase === 'question') {
@@ -408,19 +471,20 @@ io.on('connection', socket => {
       log(`${player.name} → ${answerIndex}`);
       const connected = getPlayers(game).filter(p => p.connected);
       if (Object.keys(game.answers).length >= connected.length) {
-        clearTimeout(game.answerTimer);
+        clearTimeout(answerTimerId);
+        answerTimerId = null;
         revealAnswers();
       }
     }
 
-    if (game.phase === 'final_race' && game.finalRace) {
+    if (game.phase === 'final_race' && game.finalRace && !game.finalRace.winnerDeclared) {
       const fr = game.finalRace;
       if (fr.answers[sid]) return;
       fr.answers[sid] = { answerIndex, timestamp: Date.now() };
-      // firstAnswer теперь определяется в revealFinalAnswers по правильности
       const connected = getPlayers(game).filter(p => p.connected);
       if (Object.keys(fr.answers).length >= connected.length) {
-        clearTimeout(game.answerTimer);
+        clearTimeout(answerTimerId);
+        answerTimerId = null;
         revealFinalAnswers();
       }
     }
@@ -444,14 +508,16 @@ io.on('connection', socket => {
 
     const connected = getPlayers(game).filter(p => p.connected);
     if (Object.keys(data.choices).length >= connected.length) {
-      clearTimeout(game.answerTimer);
+      clearTimeout(answerTimerId);
+      answerTimerId = null;
       revealThreePaths();
     }
   });
 
+  // Баги #8, #9: полный сброс с очисткой всех таймеров
   socket.on('reset_game', () => {
-    clearTimeout(game.answerTimer);
-    game = createGame();
+    clearAllTimers();            // сначала убиваем все висящие таймеры
+    game = createGame();         // новое состояние
     minigameShortIdx = 0;
     minigameLongIdx  = 0;
     minigameTurn     = 'short';
@@ -468,7 +534,7 @@ io.on('connection', socket => {
   });
 });
 
-// ── Запуск ────────────────────────────────────────────────────────────────────
+// ── Запуск ───────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIP();
   const assetsConfig = buildAssetsConfig();
