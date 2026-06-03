@@ -8,7 +8,7 @@ const QRCode     = require('qrcode');
 const os         = require('os');
 
 const {
-  CHARACTERS, ROUTE_LENGTH, MINIGAME_SPOTS, FINAL_STEPS,
+  CHARACTERS, ROUTE_LENGTH, TOTAL_QUESTIONS, MINIGAME_SPOTS, FINAL_STEPS,
   createGame, createPlayer, getPlayers, getLeader, getLastPlace,
   checkAanansiHelp, updateHindrances, shuffle, publicState,
 } = require('./gameState');
@@ -19,10 +19,9 @@ const QUESTIONS_RAW = require('../data/questions.json');
 
 // ── Конфиг ───────────────────────────────────────────────────────────────────
 const PORT             = process.env.PORT || 3001;
-const ANSWER_TIMEOUT   = 20_000;
-const RESULT_PAUSE     = 3_000;
-// Баг #5: добавлена обработка MINIGAME_TIMEOUT с fallback
-const MINIGAME_TIMEOUT = parseInt(process.env.MINIGAME_TIMEOUT, 10) || 20_000;
+const ANSWER_TIMEOUT   = 30_000;   // 30 сек на ответ
+const RESULT_PAUSE     = 7_000;    // 7 сек на просмотр результата
+const MINIGAME_TIMEOUT = parseInt(process.env.MINIGAME_TIMEOUT, 10) || 25_000;
 
 // ── Приложение ───────────────────────────────────────────────────────────────
 const app    = express();
@@ -127,23 +126,20 @@ function revealAnswers() {
 
   clearTimeout(answerTimerId);
   answerTimerId = null;
-  game.phase = 'question_result';
-  broadcastState();
 
-  // Баг #1: приводим к числу, потому что JSON может содержать строку
+  // Считаем правильные ответы → начисляем score
   const correct = Number(game.currentQuestion.correct);
   const moved   = [];
 
   getPlayers(game).forEach(p => {
     const ans = game.answers[p.id];
     if (ans && Number(ans.answerIndex) === correct) {
-      p.position = Math.min(p.position + 1, ROUTE_LENGTH);
+      p.score = (p.score || 0) + 1;
       moved.push(p.id);
     } else if (!ans) {
       if (checkAanansiHelp(game, p.id)) {
         game.aanansiHelpsCount[p.id] = (game.aanansiHelpsCount[p.id] || 0) + 1;
-        p.position = Math.min(p.position + 1, ROUTE_LENGTH);
-        // Баг #7: флаг должен сбрасываться после использования помощи
+        p.score = (p.score || 0) + 1;
         game.aanansiHelpActive[p.id] = false;
         log(`Ананси помогает ${p.name} (${game.aanansiHelpsCount[p.id]})`);
       }
@@ -153,15 +149,18 @@ function revealAnswers() {
   });
 
   updateHindrances(game);
-  const leader    = getLeader(game);
-  const nextPhase = leader ? checkMilestone(leader) : null;
+  const nextPhase = checkMilestone();
+
+  // Только теперь переключаем фазу и рассылаем — клиент увидит уже НОВЫЕ позиции
+  game.phase = 'question_result';
+  broadcastState();
 
   broadcast('question_result', {
     correctIndex: correct,
     answers:      game.answers,
     moved,
     players: getPlayers(game).map(p => ({
-      id: p.id, name: p.name, position: p.position, hindranceLevel: p.hindranceLevel,
+      id: p.id, name: p.name, score: p.score, hindranceLevel: p.hindranceLevel,
     })),
   });
 
@@ -173,12 +172,11 @@ function revealAnswers() {
   }, RESULT_PAUSE);
 }
 
-function checkMilestone(leader) {
-  if (leader.position >= ROUTE_LENGTH) return 'final_race';
-  if (MINIGAME_SPOTS.includes(leader.position)) {
-    const key = `minigame_${leader.position}`;
-    if (!game[key]) { game[key] = true; return 'minigame'; }
-  }
+// Теперь milestone = по номеру вопроса, а не позиции лидера
+function checkMilestone() {
+  const qi = game.questionIndex; // уже инкрементирован: после 3-го вопроса = 3
+  if (qi >= TOTAL_QUESTIONS) return 'final_race';
+  if (MINIGAME_SPOTS.includes(qi)) return 'minigame';
   return null;
 }
 
@@ -213,13 +211,17 @@ function startMinigameIntro() {
 
     if (id === 'three_paths') {
       startThreePaths();
+    } else if (id === 'personality_vote') {
+      startPersonalityVote();
+    } else if (id === 'spy') {
+      startSpyGame();
+    } else if (id === 'aanansi_story') {
+      startAanansiStory();
+    } else if (id === 'crocodile') {
+      startCrocodile();
     } else {
-      // Заглушка для остальных — тоже с таймаутом (баг #4)
       broadcastState();
-      minigameTimerId = setTimeout(() => {
-        minigameTimerId = null;
-        endMinigame();
-      }, MINIGAME_TIMEOUT);
+      minigameTimerId = setTimeout(() => { minigameTimerId = null; endMinigame(); }, MINIGAME_TIMEOUT);
     }
   }, 3_000);
 }
@@ -272,6 +274,40 @@ function pickAanansiLine() {
   return ANANSI_LINES[Math.floor(Math.random() * ANANSI_LINES.length)];
 }
 
+// ── Данные для мини-игр ───────────────────────────────────────────────────────
+const VOTE_QUESTIONS = [
+  'Кто скорее всего запутается в паутине Ананси?',
+  'Кто из игроков самый хитрый, как паук?',
+  'Кто убежит первым, встретив крокодила?',
+  'Кто на самом деле помогает Ананси плести ловушки?',
+  'Кто принёс бы меньше всего пользы в джунглях?',
+  'Кто первым пойдёт по неправильной тропе?',
+  'Кто скорее всего сболтнёт лишнее шпиону?',
+];
+
+const SPY_WORDS = [
+  'банан', 'паутина', 'водопад', 'костёр', 'маска',
+  'лодка', 'фонарь', 'компас', 'ловушка', 'зеркало',
+  'барабан', 'рыба', 'луна', 'яд', 'амулет',
+  'тотем', 'флейта', 'яма', 'сеть', 'клад',
+];
+
+const STORY_PROMPTS = [
+  'Однажды в чаще леса Ананси нашёл кое-что необычное...',
+  'Паук Ананси поспорил с крокодилом на самую ценную вещь...',
+  'Когда луна скрылась за облаками, из болота вышло нечто...',
+  'Ананси позвал всех зверей на совет, но никто не знал зачем...',
+  'В самую тёмную ночь года в деревне исчезли все барабаны...',
+  'Старый паук сказал: тот, кто найдёт его сеть, получит силу...',
+];
+
+const CROC_WORDS = [
+  'слон', 'паутина', 'водопад', 'барабан', 'джунгли',
+  'луна', 'крокодил', 'лодка', 'маска', 'танец',
+  'гром', 'звезда', 'рыба', 'огонь', 'пальма',
+  'обезьяна', 'змея', 'ветер', 'камень', 'перья',
+];
+
 function revealThreePaths() {
   clearTimeout(answerTimerId);
   answerTimerId = null;
@@ -285,9 +321,9 @@ function revealThreePaths() {
   getPlayers(game).forEach(p => {
     const choice = data.choices[p.id];
     if (choice === data.winPath) {
-      p.position = Math.min(p.position + 1, ROUTE_LENGTH);
+      p.score = (p.score || 0) + 1;
       winners.push(p.id);
-      log(`${p.name} выбрал верную тропу, +1 шаг`);
+      log(`${p.name} выбрал верную тропу, +1 очко`);
     }
   });
 
@@ -301,7 +337,7 @@ function revealThreePaths() {
     choices:  data.choices,
     winners,
     players:  getPlayers(game).map(p => ({
-      id: p.id, name: p.name, position: p.position,
+      id: p.id, name: p.name, score: p.score,
     })),
   });
 
@@ -312,16 +348,145 @@ function revealThreePaths() {
   }, 4_000);
 }
 
+// ── PERSONALITY VOTE ─────────────────────────────────────────────────────────
+function startPersonalityVote() {
+  const question = VOTE_QUESTIONS[Math.floor(Math.random() * VOTE_QUESTIONS.length)];
+  game.currentMinigame.data = { question, votes: {}, revealed: false, winner: null };
+  broadcastState();
+  log('Personality Vote: вопрос —', question);
+  minigameTimerId = setTimeout(() => { minigameTimerId = null; revealPersonalityVote(); }, MINIGAME_TIMEOUT);
+}
+
+function revealPersonalityVote() {
+  clearTimeout(minigameTimerId); minigameTimerId = null;
+  const mg = game.currentMinigame;
+  if (!mg || mg.id !== 'personality_vote') return;
+  const data = mg.data;
+
+  // Считаем голоса
+  const counts = {};
+  Object.values(data.votes).forEach(targetId => {
+    counts[targetId] = (counts[targetId] || 0) + 1;
+  });
+
+  // Находим победителя (больше голосов = штраф)
+  let maxVotes = 0, winnerId = null;
+  Object.entries(counts).forEach(([id, count]) => {
+    if (count > maxVotes) { maxVotes = count; winnerId = id; }
+  });
+
+  // Штраф для «победителя»: -1 шаг (не ниже 0)
+  if (winnerId && game.players[winnerId]) {
+    game.players[winnerId].score = Math.max(0, (game.players[winnerId].score || 0) - 1);
+    log(`Personality Vote: ${game.players[winnerId].name} получает штраф -1 очко`);
+  }
+
+  data.revealed = true;
+  data.winner   = winnerId;
+  updateHindrances(game);
+  broadcastState();
+
+  resultPauseTimer = setTimeout(() => { resultPauseTimer = null; endMinigame(); }, 4_000);
+}
+
+// ── SPY ───────────────────────────────────────────────────────────────────────
+const SPY_TIMEOUT = 90_000;   // 90 сек на обсуждение
+
+function startSpyGame() {
+  const connected = getPlayers(game).filter(p => p.connected);
+  if (connected.length === 0) { endMinigame(); return; }
+  const spy  = connected[Math.floor(Math.random() * connected.length)];
+  const word = SPY_WORDS[Math.floor(Math.random() * SPY_WORDS.length)];
+
+  game.currentMinigame.data = { spyId: spy.id, word };
+  broadcastState();
+  log(`Spy: шпион = ${spy.name}, слово = ${word}`);
+
+  // Игра живая — просто даём время на обсуждение, потом сами заканчиваем
+  minigameTimerId = setTimeout(() => { minigameTimerId = null; endMinigame(); }, SPY_TIMEOUT);
+}
+
+// ── ANANSI STORY ─────────────────────────────────────────────────────────────
+const STORY_TIMEOUT = 60_000;  // 60 сек на написание
+
+function startAanansiStory() {
+  const prompt = STORY_PROMPTS[Math.floor(Math.random() * STORY_PROMPTS.length)];
+  game.currentMinigame.data = { prompt, submissions: {}, phase: 'write', currentIndex: undefined };
+  broadcastState();
+  log('Anansi Story: промпт —', prompt);
+  minigameTimerId = setTimeout(() => { minigameTimerId = null; revealAanansiStory(); }, STORY_TIMEOUT);
+}
+
+function revealAanansiStory() {
+  clearTimeout(minigameTimerId); minigameTimerId = null;
+  const mg = game.currentMinigame;
+  if (!mg || mg.id !== 'aanansi_story') return;
+  const data = mg.data;
+  data.phase        = 'reveal';
+  data.currentIndex = 0;
+  broadcastState();
+  log('Anansi Story: reveal фаза');
+
+  // Поочерёдно подсвечиваем истории, потом заканчиваем
+  const texts = Object.keys(data.submissions);
+  let idx = 0;
+  const cycleNext = () => {
+    idx++;
+    if (idx < texts.length) {
+      data.currentIndex = idx;
+      broadcastState();
+      resultPauseTimer = setTimeout(cycleNext, 3_000);
+    } else {
+      resultPauseTimer = setTimeout(() => { resultPauseTimer = null; endMinigame(); }, 3_000);
+    }
+  };
+  resultPauseTimer = setTimeout(cycleNext, 3_000);
+}
+
+// ── CROCODILE ────────────────────────────────────────────────────────────────
+const CROC_TIMEOUT = 60_000;  // 60 сек на угадывание
+
+function startCrocodile() {
+  const connected = getPlayers(game).filter(p => p.connected);
+  if (connected.length === 0) { endMinigame(); return; }
+  const showman = connected[Math.floor(Math.random() * connected.length)];
+  const word    = CROC_WORDS[Math.floor(Math.random() * CROC_WORDS.length)];
+
+  game.currentMinigame.data = { showmanId: showman.id, word, guesses: {}, revealed: false, winnerId: null };
+  broadcastState();
+  log(`Crocodile: ведущий = ${showman.name}, слово = ${word}`);
+  minigameTimerId = setTimeout(() => { minigameTimerId = null; revealCrocodile(null); }, CROC_TIMEOUT);
+}
+
+function revealCrocodile(winnerId) {
+  clearTimeout(minigameTimerId); minigameTimerId = null;
+  const mg = game.currentMinigame;
+  if (!mg || mg.id !== 'crocodile') return;
+  const data = mg.data;
+  data.revealed = true;
+  data.winnerId = winnerId;
+
+  // Победитель угадал — +1 шаг
+  if (winnerId && game.players[winnerId]) {
+    game.players[winnerId].score = Math.min((game.players[winnerId].score || 0) + 1, TOTAL_QUESTIONS);
+    log(`Crocodile: ${game.players[winnerId].name} угадал, +1 очко`);
+  }
+
+  updateHindrances(game);
+  broadcastState();
+  resultPauseTimer = setTimeout(() => { resultPauseTimer = null; endMinigame(); }, 4_000);
+}
+
 // ── Финальная гонка ──────────────────────────────────────────────────────────
 function startFinalRace() {
   const players = getPlayers(game);
-  const leader  = getLeader(game);
   const startPositions = {};
   players.forEach(p => {
-    if      (p.id === leader.id || p.position >= ROUTE_LENGTH) startPositions[p.id] = 4;
-    else if (p.position >= 10)                                  startPositions[p.id] = 3;
-    else if (p.position >= 5)                                   startPositions[p.id] = 2;
-    else                                                        startPositions[p.id] = 1;
+    const s = p.score || 0;
+    if      (s >= 12) startPositions[p.id] = 4;
+    else if (s >= 8)  startPositions[p.id] = 3;
+    else if (s >= 4)  startPositions[p.id] = 2;
+    else              startPositions[p.id] = 1;
   });
   game.finalRace = {
     positions: startPositions,
@@ -511,6 +676,73 @@ io.on('connection', socket => {
       clearTimeout(answerTimerId);
       answerTimerId = null;
       revealThreePaths();
+    }
+  });
+
+  // ── PERSONALITY VOTE: голосование ─────────────────────────────────────────
+  socket.on('personality_vote', ({ targetId }) => {
+    const player = game.players[sid];
+    if (!player) return;
+    if (game.phase !== 'minigame') return;
+    if (game.currentMinigame?.id !== 'personality_vote') return;
+    const data = game.currentMinigame?.data;
+    if (!data || data.revealed) return;
+    if (data.votes[sid] !== undefined) return;           // уже проголосовал
+    if (!game.players[targetId]) return;                 // несуществующий игрок
+
+    data.votes[sid] = targetId;
+    log(`${player.name} голосует за ${game.players[targetId]?.name}`);
+    broadcastState();
+
+    const connected = getPlayers(game).filter(p => p.connected);
+    if (Object.keys(data.votes).length >= connected.length) {
+      clearTimeout(minigameTimerId); minigameTimerId = null;
+      revealPersonalityVote();
+    }
+  });
+
+  // ── ANANSI STORY: отправка текста ─────────────────────────────────────────
+  socket.on('story_submit', ({ text }) => {
+    const player = game.players[sid];
+    if (!player) return;
+    if (game.phase !== 'minigame') return;
+    if (game.currentMinigame?.id !== 'aanansi_story') return;
+    const data = game.currentMinigame?.data;
+    if (!data || data.phase !== 'write') return;
+    if (data.submissions[sid] !== undefined) return;     // уже отправил
+    if (!text?.trim()) return;
+
+    data.submissions[sid] = text.trim().slice(0, 200);
+    log(`${player.name} отправил историю`);
+    broadcastState();
+
+    const connected = getPlayers(game).filter(p => p.connected);
+    if (Object.keys(data.submissions).length >= connected.length) {
+      clearTimeout(minigameTimerId); minigameTimerId = null;
+      revealAanansiStory();
+    }
+  });
+
+  // ── CROCODILE: угадывание слова ───────────────────────────────────────────
+  socket.on('croc_guess', ({ text }) => {
+    const player = game.players[sid];
+    if (!player) return;
+    if (game.phase !== 'minigame') return;
+    if (game.currentMinigame?.id !== 'crocodile') return;
+    const data = game.currentMinigame?.data;
+    if (!data || data.revealed) return;
+    if (sid === data.showmanId) return;                  // ведущий не угадывает
+    if (!text?.trim()) return;
+
+    const guess = text.trim().slice(0, 40);
+    data.guesses[sid] = guess;
+    log(`${player.name} угадывает: ${guess}`);
+    broadcastState();
+
+    // Проверяем правильность (без учёта регистра и пробелов по краям)
+    if (guess.toLowerCase() === data.word.toLowerCase()) {
+      clearTimeout(minigameTimerId); minigameTimerId = null;
+      revealCrocodile(sid);
     }
   });
 

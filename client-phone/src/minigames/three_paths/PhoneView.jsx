@@ -18,7 +18,7 @@ const ANANSI_TAUNTS = [
   'Паутина уже натянута. Беги по правильной нити.',
 ];
 
-export default function ThreePathsPhone({ minigame, myId, onChoose }) {
+export default function ThreePathsPhone({ minigame, myId, onEmit }) {
   const data     = minigame?.data || {};
   const paths    = data.paths    || ['Тропа теней', 'Путь сквозь туман', 'Тропа ветра'];
   const choices  = data.choices  || {};
@@ -109,7 +109,7 @@ export default function ThreePathsPhone({ minigame, myId, onChoose }) {
                   borderColor:  PATH_BORDER[i],
                   color:        PATH_COLORS[i],
                 }}
-                onClick={() => onChoose && typeof onChoose === 'function' && onChoose(i)}
+                onClick={() => onEmit && onEmit('three_paths_choose', { pathIndex: i })}
               >
                 <span style={s.pathBtnIcon}>{PATH_ICONS[i]}</span>
                 <span style={s.pathBtnName}>{pathName}</span>

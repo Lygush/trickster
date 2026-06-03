@@ -2,7 +2,7 @@ import React from 'react';
 
 const LETTERS = ['А', 'Б', 'В', 'Г'];
 
-export default function ResultScreen({ question, revealData, myAnswer, myPosition }) {
+export default function ResultScreen({ question, revealData, myAnswer, myScore }) {
   if (!question || !revealData) return null;
 
   const correct    = revealData.correctIndex;
@@ -21,15 +21,15 @@ export default function ResultScreen({ question, revealData, myAnswer, myPositio
           {wasCorrect ? '✓' : answered ? '✗' : '⏱'}
         </div>
         <div style={s.resultText}>
-          {wasCorrect ? 'Верно! +1 шаг' : answered ? 'Неверно' : 'Не успел'}
+          {wasCorrect ? 'Верно! +1 очко' : answered ? 'Неверно' : 'Не успел'}
         </div>
       </div>
 
       {/* Позиция */}
       <div style={s.posCard}>
-        <div style={s.posLabel}>Твоя позиция</div>
+        <div style={s.posLabel}>Мой счёт</div>
         <div style={s.posValue}>
-          {myPosition} <span style={s.posOf}>/ 15</span>
+          {myScore ?? 0} <span style={s.posOf}>/ 15</span>
         </div>
       </div>
 

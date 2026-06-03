@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 const LETTERS = ['А', 'Б', 'В', 'Г'];
-const ANSWER_TIMEOUT = 20;
+const ANSWER_TIMEOUT = 30;
 
 const HINDRANCE_LABELS = {
   1: { text: 'Ананси путает!', sub: 'Один из ответов — ловушка', color: '#c8a830' },

@@ -1,177 +1,154 @@
 import React from 'react';
 
-const CHARACTERS = {
-  spider:  '🕷️',
-  frog:    '🐸',
-  snake:   '🐍',
-  beetle:  '🪲',
-  lizard:  '🦎',
-};
+const CHAR_EMOJI = { spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎' };
+const MINI_SPOTS = new Set([3, 6, 9, 12]);
+const TOTAL      = 15;
 
-const MINIGAME_SPOTS = [3, 6, 9, 12];
+export default function MapPanel({ players, questionIndex = 0 }) {
+  const sorted   = [...players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const leaderId = sorted[0]?.id;
 
-// Координаты 15 точек маршрута на SVG 180×400
-// Точка 1 (старт) снизу, точка 15 (финиш) сверху
-const WAYPOINT_COORDS = [
-  null,           // index 0 unused
-  { x: 90,  y: 310 }, // 1 START
-  { x: 60,  y: 290 }, // 2
-  { x: 118, y: 270 }, // 3 MINI
-  { x: 58,  y: 252 }, // 4
-  { x: 122, y: 232 }, // 5
-  { x: 90,  y: 215 }, // 6 MINI
-  { x: 55,  y: 215 }, // 7  (смещение чтоб не совпадало с 6)
-  { x: 120, y: 174 }, // 8
-  { x: 62,  y: 158 }, // 9 MINI
-  { x: 90,  y: 138 }, // 10
-  { x: 118, y: 120 }, // 11
-  { x: 65,  y: 105 }, // 12 MINI
-  { x: 90,  y: 85  }, // 13
-  { x: 112, y: 68  }, // 14
-  { x: 90,  y: 38  }, // 15 FINISH
-];
-
-// Сдвиги чтобы иконки разных игроков на одной точке не перекрывались
-const OFFSETS = [
-  { dx: 0,  dy: 0  },
-  { dx: -14, dy: -8 },
-  { dx: 14, dy: -8 },
-  { dx: -10, dy: 10 },
-  { dx: 10, dy: 10 },
-];
-
-export default function MapPanel({ players }) {
-  // Группируем игроков по позиции
-  const byPosition = {};
-  players.forEach(p => {
-    if (!byPosition[p.position]) byPosition[p.position] = [];
-    byPosition[p.position].push(p);
-  });
+  // Слоты сверху вниз: ФИНИШ, 15, 14 … 1
+  const slots = [
+    { type: 'finish' },
+    ...Array.from({ length: TOTAL }, (_, i) => ({ type: 'step', q: TOTAL - i })),
+  ];
 
   return (
-    <div style={styles.panel}>
-      <div style={styles.title}>Маршрут</div>
-      <div style={styles.svgWrap}>
-        <svg viewBox="0 0 180 400" style={{ width: '100%', height: '100%' }} preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <filter id="mg"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-            <filter id="sg"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          </defs>
+    <div style={s.panel}>
 
-          {/* Path shadow */}
-          <path d="M90 385 C45 365 140 335 90 305 C42 275 142 245 90 215 C40 185 144 155 90 125 C40 95 142 65 90 35 C82 24 90 16 90 16"
-            fill="none" stroke="#060e06" strokeWidth="12" strokeLinecap="round"/>
-          {/* Path */}
-          <path d="M90 385 C45 365 140 335 90 305 C42 275 142 245 90 215 C40 185 144 155 90 125 C40 95 142 65 90 35 C82 24 90 16 90 16"
-            fill="none" stroke="#1a3a18" strokeWidth="6" strokeLinecap="round"/>
-          {/* Dashes */}
-          <path d="M90 385 C45 365 140 335 90 305 C42 275 142 245 90 215 C40 185 144 155 90 125 C40 95 142 65 90 35 C82 24 90 16 90 16"
-            fill="none" stroke="#2a5520" strokeWidth="1.2" strokeLinecap="round" strokeDasharray="4 7" opacity="0.7"/>
-
-          {/* Finish */}
-          <circle cx="90" cy="16" r="9" fill="#102808" stroke="#5a9a30" strokeWidth="1.5" filter="url(#mg)"/>
-          <text x="90" y="20" textAnchor="middle" fontSize="9" fill="#8acc40">🏁</text>
-          <text x="90" y="10" textAnchor="middle" fontSize="6" fill="#4a8a28" letterSpacing="1" fontFamily="Nunito,sans-serif">ФИНИШ</text>
-
-          {/* Start */}
-          <circle cx="90" cy="320" r="7" fill="#0e2010" stroke="#2a5020" strokeWidth="1.2"/>
-          <text x="90" y="334" textAnchor="middle" fontSize="6" fill="#3a6028" letterSpacing="1" fontFamily="Nunito,sans-serif">СТАРТ</text>
-
-          {/* Waypoints 1–15 */}
-          {WAYPOINT_COORDS.slice(1).map((pt, i) => {
-            const step = i + 1;
-            const isMini = MINIGAME_SPOTS.includes(step);
-            const isFinish = step === 15;
-            if (isFinish) return null;
-            if (isMini) return (
-              <g key={step}>
-                <circle cx={pt.x} cy={pt.y} r="8" fill="#141c08" stroke="#c8a830" strokeWidth="1.5" filter="url(#sg)"/>
-                <text x={pt.x} y={pt.y + 4} textAnchor="middle" fontSize="8" fill="#c8a830">★</text>
-              </g>
-            );
+      {/* ── Трек ── */}
+      <div style={s.track}>
+        {slots.map((slot, idx) => {
+          if (slot.type === 'finish') {
             return (
-              <circle key={step} cx={pt.x} cy={pt.y} r="4" fill="#0e2010" stroke="#2a5020" strokeWidth="1"/>
+              <React.Fragment key="finish">
+                <div style={s.slotFinish}>🏁</div>
+                <div style={{ ...s.line, background: questionIndex > TOTAL ? '#2a5a22' : '#111f11' }}/>
+              </React.Fragment>
             );
-          })}
+          }
 
-          {/* Player icons */}
-          {Object.entries(byPosition).map(([pos, playersAtPos]) =>
-            playersAtPos.map((p, idx) => {
-              const posNum = parseInt(pos);
-              if (posNum < 0 || posNum > 15) return null;
-              const coord = posNum === 0
-                ? { x: 90, y: 322 }
-                : WAYPOINT_COORDS[posNum];
-              if (!coord) return null;
-              const off = OFFSETS[idx % OFFSETS.length];
-              const emoji = CHARACTERS[p.character] || '❓';
-              const isLeader = players[0]?.id === p.id; // лидер первый в массиве
-              return (
-                <text
-                  key={p.id}
-                  x={coord.x + off.dx}
-                  y={coord.y + off.dy + 4}
-                  textAnchor="middle"
-                  fontSize={isLeader ? 18 : 15}
-                  filter={isLeader ? 'url(#mg)' : undefined}
-                  style={{ transition: 'all 0.5s ease' }}
-                >
-                  {emoji}
-                </text>
-              );
-            })
-          )}
-        </svg>
+          const { q } = slot;
+          const isMini = MINI_SPOTS.has(q);
+          const isDone = q < questionIndex;
+          const isCur  = q === questionIndex;
+          const isLast = q === 1;
+
+          return (
+            <React.Fragment key={q}>
+              <div style={{
+                ...s.slot,
+                ...(isMini ? s.mini : {}),
+                ...(isDone ? s.done : {}),
+                ...(isCur  ? s.cur  : {}),
+              }}>
+                {isMini ? '★' : q}
+              </div>
+              {!isLast && (
+                <div style={{ ...s.line, background: isDone ? '#2a5a22' : '#111f11' }}/>
+              )}
+            </React.Fragment>
+          );
+        })}
       </div>
-      <div style={styles.legend}>
-        <div style={styles.legendItem}><div style={styles.legendDot}/> вопрос</div>
-        <div style={styles.legendItem}><div style={styles.legendStar}/> мини-игра</div>
+
+      {/* ── Разделитель ── */}
+      <div style={s.sep}/>
+
+      {/* ── Таблица очков ── */}
+      <div style={s.label}>ОЧКИ</div>
+      <div style={s.scores}>
+        {sorted.map((p, i) => {
+          const score  = p.score ?? 0;
+          const isLead = p.id === leaderId;
+          return (
+            <div key={p.id} style={{
+              ...s.row,
+              opacity:     p.connected ? 1 : 0.35,
+              background:  isLead ? 'rgba(26,18,2,0.95)' : 'rgba(5,12,5,0.9)',
+              borderColor: isLead ? '#6a5412' : '#162614',
+            }}>
+              <span style={s.rank}>{i + 1}</span>
+              <span style={s.emo}>{CHAR_EMOJI[p.character] ?? '❓'}</span>
+              <div style={s.nameCol}>
+                <span style={{ ...s.name, color: isLead ? '#c8a830' : '#6aaa3a' }}>
+                  {p.name.length > 8 ? p.name.slice(0, 8) + '…' : p.name}
+                </span>
+                <div style={s.bar}>
+                  <div style={{
+                    ...s.fill,
+                    width: `${(score / TOTAL) * 100}%`,
+                    background: isLead ? '#c8a830' : '#3a7a28',
+                  }}/>
+                </div>
+              </div>
+              <span style={{ ...s.sc, color: isLead ? '#f0d060' : '#c8e8a0' }}>
+                {score}<span style={s.scOf}>/{TOTAL}</span>
+              </span>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Легенда */}
+      <div style={s.legend}><span style={{ color: '#c8a830' }}>★</span> мини-игра</div>
     </div>
   );
 }
 
-const styles = {
+const s = {
   panel: {
-    width: 200,
+    width: 200, flexShrink: 0,
+    background: 'rgba(2,7,2,0.92)',
+    borderRight: '1px solid #122212',
+    display: 'flex', flexDirection: 'column',
+    alignItems: 'center',
+    padding: '56px 10px 14px',     // большой отступ сверху → трек смещается вниз
+    backdropFilter: 'blur(10px)',
+    gap: 6,
+    overflowY: 'auto', scrollbarWidth: 'none',
+  },
+
+  track: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center',
     flexShrink: 0,
-    background: 'rgba(4,10,5,0.82)',
-    borderRight: '1px solid #1c3a1a',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    padding: '18px 10px 14px',
-    backdropFilter: 'blur(6px)',
   },
-  title: {
-    fontSize: 9,
-    letterSpacing: 3,
-    color: '#3a6028',
-    textTransform: 'uppercase',
-    marginBottom: 10,
+  line: { width: 2, height: 7, borderRadius: 1, transition: 'background .4s', flexShrink: 0 },
+
+  slot: {
+    width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+    border: '1.5px solid #1c3618', background: '#070d07',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel',serif",
+    color: '#243820', transition: 'all .35s',
   },
-  svgWrap: {
-    flex: 1,
-    width: '100%',
+  mini: { borderColor: '#6a5412', color: '#c8a830', background: '#100d00', fontSize: 12 },
+  done: { borderColor: '#2e6822', color: '#4a9a30', background: '#0b1c09' },
+  cur:  { borderColor: '#c8a830', color: '#f0d060', background: 'rgba(200,168,48,0.14)', width: 30, height: 30, fontSize: 11, boxShadow: '0 0 10px rgba(200,168,48,0.35)' },
+  slotFinish: {
+    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+    border: '1.5px solid #c8a830', background: '#0a1804',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 14,
   },
-  legend: {
-    display: 'flex',
-    gap: 10,
-    marginTop: 8,
+
+  sep:    { width: '88%', height: 1, background: '#122212', flexShrink: 0, margin: '4px 0' },
+  label:  { fontSize: 7, letterSpacing: 3, color: '#2a4a20', textTransform: 'uppercase', fontFamily: "'Cinzel',serif", flexShrink: 0 },
+
+  scores: { width: '100%', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 },
+  row: {
+    display: 'flex', alignItems: 'center', gap: 5,
+    border: '1px solid', borderRadius: 8, padding: '5px 7px',
+    transition: 'all .4s',
   },
-  legendItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    fontSize: 9,
-    color: '#3a6028',
-  },
-  legendDot: {
-    width: 8, height: 8, borderRadius: '50%',
-    background: '#2a5a22', border: '1px solid #5a9a30',
-  },
-  legendStar: {
-    width: 10, height: 10, borderRadius: '50%',
-    background: '#1a3010', border: '1px solid #c8a830',
-  },
+  rank:    { fontSize: 8, color: '#283e20', minWidth: 10, fontFamily: "'Cinzel',serif" },
+  emo:     { fontSize: 14, lineHeight: 1, flexShrink: 0 },
+  nameCol: { flex: 1, display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden', minWidth: 0 },
+  name:    { fontSize: 10, fontFamily: "'Nunito',sans-serif", overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', transition: 'color .4s' },
+  bar:     { width: '100%', height: 3, background: '#0a140a', borderRadius: 2, overflow: 'hidden' },
+  fill:    { height: '100%', borderRadius: 2, transition: 'width .6s ease' },
+  sc:      { fontFamily: "'Cinzel',serif", fontSize: 12, minWidth: 26, textAlign: 'right', flexShrink: 0 },
+  scOf:    { fontSize: 8, color: '#2e4a20' },
+  legend:  { fontSize: 8, color: '#2e4820', marginTop: 2 },
 };

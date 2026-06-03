@@ -20,3 +20,4 @@ if errorlevel 1 ( echo ERROR: server npm install failed & pause & exit /b 1 )
 
 echo Starting server... (Ctrl+C to stop)
 node src/index.js
+cd ../

@@ -142,7 +142,7 @@ export default function App() {
           question={gameState?.currentQuestion}
           revealData={revealData}
           myAnswer={myAnswer}
-          myPosition={me?.position || 0}
+          myScore={me?.score ?? 0}
         />
       </PhoneShell>
     );
@@ -217,7 +217,7 @@ export default function App() {
               : 'В следующий раз повезёт!'}
           </div>
           <div style={winnerStyles.pos}>
-            Твоя позиция: {me?.position || 0} / 15
+            Твой счёт: {me?.score ?? 0} / 15
           </div>
         </div>
       </PhoneShell>
