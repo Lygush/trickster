@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Сквозь чащу • Game Design Document</title>
-  <!-- Google Fonts: Cinzel для заголовков, Nunito для текста -->
+  <title>Сквозь чащу • Game Design Document (актуализирован)</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Nunito:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -44,7 +43,6 @@
       overflow: hidden;
     }
 
-    /* декоративная паутина */
     .document::before {
       content: "";
       position: absolute;
@@ -83,7 +81,6 @@
       text-shadow: 0 0 15px #b4942e, 0 4px 10px rgba(0,0,0,0.7);
       margin-bottom: 0.5rem;
       line-height: 1.2;
-      word-break: break-word;
     }
 
     .subtitle {
@@ -221,7 +218,7 @@
 
     .mini-game-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 1rem;
       margin: 1rem 0;
     }
@@ -249,16 +246,19 @@
 <body>
   <div class="document">
     <h1>СКВОЗЬ ЧАЩУ</h1>
-    <div class="subtitle">Party game • 4–8 игроков • Ананси ведёт игру</div>
+    <div class="subtitle">Party game • 2–6 игроков • Ананси плетёт сеть</div>
 
-    <!-- Концепция -->
+    <!-- Общий блок доработок -->
+    <div class="warn">
+      <strong>Требуемые доработки:</strong> Все мини-игры, финальная гонка, механики помех и помощи нуждаются в улучшении (детали ниже).
+    </div>
+
     <h2>🕸️ Концепция</h2>
     <div class="card">
       <p><span class="tag">Большой экран</span> — сервер, <span class="tag">Телефоны</span> — контроллеры.</p>
-      <p>Локальная сеть, подключение по QR-коду. Ведущий — <strong>Ананси</strong>, паук-трикстер из африканской мифологии.</p>
+      <p>Локальная сеть, подключение по QR-коду. Ведущий — <strong>Ананси</strong>, паук-трикстер.</p>
     </div>
 
-    <!-- Персонажи -->
     <h2>🦎 Персонажи</h2>
     <div class="card">
       <div class="character-list">
@@ -268,136 +268,146 @@
         <span class="char-badge">🪲 Жук</span>
         <span class="char-badge">🦎 Ящерица</span>
       </div>
-      <p>У каждого одна пассивная способность, отражающая природу существа.</p>
-      <div class="warn">Не решено: конкретные пассивки</div>
+      <p>У каждого одна пассивная способность. <span class="tag">Не решено</span> конкретные пассивки.</p>
     </div>
 
-    <!-- Основной маршрут -->
+    <!-- Основной маршрут – исправлено под код -->
     <h2>🌿 Основной маршрут</h2>
     <div class="card">
-      <p><span class="tag">15 точек</span>, финиш на 15-й. Количество вопросов ≠ шаги: не ответил — не продвинулся.</p>
-      <p><strong>Вопросы:</strong> один на большом экране для всех, отвечают на телефоне. Правильный ответ — шаг вперёд.</p>
-      <p><strong>Мини-игры:</strong> триггерятся, когда лидер доходит до точек <strong>3, 6, 9, 12</strong>. Ананси останавливает лидера, все замирают и играют. Чередование: короткая / длинная.</p>
+      <p><strong>11 вопросов</strong> (<code>TOTAL_QUESTIONS = 11</code>). Каждый правильный ответ — шаг вперёд. Неправильный — шага нет.</p>
+      <p><strong>Мини-игры</strong> запускаются на вопросах <strong>3, 6, 9</strong> (<code>MINIGAME_SPOTS = [3, 6, 9]</code>).</p>
+      <p>После 11 вопросов начинается <strong>финальная гонка из 12 шагов</strong> (<code>FINAL_STEPS = 12</code>).</p>
     </div>
 
-    <!-- Мини-игры -->
+    <!-- Мини-игры – уточнены и помечены доработкой -->
     <h2>🎲 Мини-игры</h2>
     <div class="mini-game-grid">
       <div class="card">
         <h3 style="margin-top:0;">⏳ Короткие</h3>
         <ul>
-          <li><strong>Три тропинки</strong> (удача)</li>
-          <li><strong>Голосование про личность</strong></li>
+          <li><strong>three_paths</strong> – «Три тропинки»</li>
+          <li><strong>personality_vote</strong> – «Голосование про личность»</li>
         </ul>
       </div>
       <div class="card">
         <h3 style="margin-top:0;">🐊 Длинные</h3>
         <ul>
-          <li><strong>Шпион</strong> (не знает, что он шпион)</li>
-          <li><strong>История Ананси</strong> (придумай финал)</li>
-          <li><strong>Крокодил</strong></li>
+          <li><strong>spy</strong> – «Шпион»</li>
+          <li><strong>aanansi_story</strong> – «История Ананси»</li>
+          <li><strong>crocodile</strong> – «Крокодил»</li>
         </ul>
       </div>
     </div>
+    <div class="warn">
+      <strong>Все мини-игры требуют доработки или переработки:</strong> интерфейс на телефоне не всегда интуитивен, нет единого стандарта подсчёта очков, баги при неполном составе, отсутствуют таймеры и анимации. План: рефакторинг каждого модуля, предпросмотр правил, унификация начисления очков (максимум 3 очка за игру).
+    </div>
 
-    <!-- Система помех и помощи -->
+    <!-- Помехи для лидера – пороги из кода -->
     <h2>⚡ Помехи для лидера</h2>
     <div class="card">
+      <p>Ананси мешает лидеру, когда его отрыв от ближайшего преследователя достигает:</p>
       <ul>
-        <li><span class="tag">3 шага</span> отрыв — лёгкие помехи на телефоне</li>
-        <li><span class="tag">4 шага</span> — сильнее</li>
-        <li><span class="tag">5+ шагов</span> — ещё сильнее + комментарии Ананси</li>
-        <li><span class="tag">8+ шагов</span> — пасхалка: Ананси смиряется и перестаёт мешать</li>
+        <li><span class="tag">≥2 шагов</span> — лёгкие помехи (сброс выбора)</li>
+        <li><span class="tag">≥4 шагов</span> — средние (задержка приёма ответа)</li>
+        <li><span class="tag">≥6 шагов</span> — максимальные (блокировка телефона на 1–2 сек)</li>
       </ul>
+      <div class="warn" style="margin-top:0.5rem;">
+        Механика работает, но требует доработки: визуализация помех на телефоне (анимация, текст), балансировка частоты срабатывания, логирование для отладки.
+      </div>
     </div>
 
+    <!-- Помощь отстающему – порог 5, макс 3 раза -->
     <h2>🤝 Помощь отстающему</h2>
     <div class="card">
-      <p>Отрыв от остальных <strong>6+ шагов</strong> — Ананси двигает на 1 шаг вперёд (максимум 2–3 раза за игру).</p>
-      <p>Если после помощи игрок отвечает неправильно — Ананси прекращает помогать.</p>
+      <p>Если отрыв <strong>лидера от конкретного игрока ≥5 шагов</strong>, Ананси двигает отстающего на 1 шаг вперёд.</p>
+      <p>Одному игроку помощь оказывается <strong>не более 3 раз за партию</strong>.</p>
+      <p>Если после получения помощи игрок отвечает <strong>неправильно</strong> — флаг <code>aanansiHelpActive</code> снимается, и помощь больше не даётся.</p>
+      <div class="warn" style="margin-top:0.5rem;">
+        Требует доработки: добавить визуальное уведомление на телефоне («Ананси подтолкнул тебя»), чёткое отключение помощи после ошибки, проверку лимитов.
+      </div>
     </div>
 
-    <!-- Финальная гонка -->
+    <!-- Финальная гонка – реализовано, но сыро -->
     <h2>🏁 Финальная гонка</h2>
     <div class="card">
-      <p><strong>Триггер:</strong> лидер достигает точки 15. Ананси открывает путь для всех.</p>
-      <p><strong>Поле 12 шагов.</strong> Стартовые позиции:</p>
+      <p><strong>Длина:</strong> 12 шагов. <strong>Стартовые позиции</strong> зависят от набранных очков:</p>
       <ul>
-        <li>🏅 Лидер(ы) — клетка 4</li>
-        <li>📍 Позиции 10–14 на маршруте — клетка 3</li>
-        <li>📍 Позиции 5–9 — клетка 2</li>
-        <li>📍 Позиции 1–4 — клетка 1</li>
+        <li>🏅 <code>score ≥ 12</code> → позиция 4</li>
+        <li>📍 <code>score ≥ 8</code> → позиция 3</li>
+        <li>📍 <code>score ≥ 4</code> → позиция 2</li>
+        <li>📍 иначе → позиция 1</li>
       </ul>
-      <p><strong>Механика:</strong> все отвечают одновременно. Первый правильный ответ — <strong>2 шага</strong>, остальные правильные — <strong>1 шаг</strong>. Помех нет, все на равных.</p>
-      <div class="warn">Не решено: как технически определяется «первый ответил» — нужна точная метка времени на сервере</div>
+      <p><strong>Механика ответа:</strong> все отвечают на общий вопрос. <strong>Первый правильный ответ</strong> (по <code>timestamp</code> на сервере) — <strong>2 шага</strong>, остальные правильные — <strong>1 шаг</strong>. Неправильный — 0 шагов.</p>
+      <p>Побеждает тот, кто первым достигает 12 шагов.</p>
+      <div class="warn" style="margin-top:0.5rem;">
+        <strong>Требует доработки:</strong><br>
+        – Визуализация трека и анимация движения персонажей.<br>
+        – Таймер ответа (10 секунд).<br>
+        – Обработка ничьей (если два игрока финишируют одновременно, побеждает с большим количеством очков).<br>
+        – Рандомизация вопросов (без повторений).<br>
+        – Подсветка «первого ответившего».
+      </div>
     </div>
 
-    <!-- Флоу игры -->
+    <!-- Флоу игры (скорректирован) -->
     <h2>🔄 Флоу игры</h2>
     <div class="flow-container">
       <span class="flow-step">LOBBY</span> <span class="arrow">→</span>
       <span class="flow-step">CHARACTER SELECT</span> <span class="arrow">→</span>
       <span class="flow-step">INTRO</span> <span class="arrow">→</span>
-      <span class="flow-step">QUESTION</span> <span class="arrow">↔</span>
-      <span class="flow-step">QUESTION RESULT</span> <span class="arrow">→</span>
-      <span class="flow-step">MINIGAME INTRO</span> <span class="arrow">→</span>
-      <span class="flow-step">MINIGAME</span> <span class="arrow">→</span>
-      <span class="flow-step">RESULT</span> <span class="arrow">→</span>
-      <span class="flow-step">FINAL RACE INTRO</span> <span class="arrow">→</span>
-      <span class="flow-step">FINAL RACE</span> <span class="arrow">→</span>
+      <span class="flow-step">QUESTION (1..11)</span> <span class="arrow">↔</span>
+      <span class="flow-step">MINIGAME (на Q3,Q6,Q9)</span> <span class="arrow">→</span>
+      <span class="flow-step">FINAL RACE (12 шагов)</span> <span class="arrow">→</span>
       <span class="flow-step">WINNER</span>
     </div>
-    <p style="font-size:0.9rem; margin-top:0.3rem; color:#b9af7c;">* Мини-игры вклиниваются по достижении лидером точек 3,6,9,12. Финальная гонка — после точки 15.</p>
+    <p style="font-size:0.9rem; margin-top:0.3rem; color:#b9af7c;">* После 11 вопросов автоматически запускается финальная гонка.</p>
 
-    <!-- Визуал -->
+    <!-- Визуал (без изменений) -->
     <h2>🎨 Визуал</h2>
     <div class="card">
-      <p><span class="tag">Большой экран</span> — фон: тропинка в джунглях, уходящая вдаль (нейросеть / ассеты).<br>
-      Миникарта слева: извилистая тропинка, иконки персонажей, точки вопросов, ✦ мини-игр.<br>
-      Снизу — карточка с вопросом и вариантами. Декор: паутина Ананси, светлячки.</p>
-      <p><span class="tag">Телефон</span> — варианты ответов крупно. Помехи для лидера: скачущие ответы, перевёрнутый экран. Подсказка для отстающего.</p>
-      <p><strong>Шрифты:</strong> <span style="font-family:'Cinzel',serif;">Cinzel</span> для заголовков, <span style="font-family:'Nunito',sans-serif;">Nunito</span> для текста.</p>
-      <p><strong>Цвета:</strong> тёмно-зелёный фон, золотые акценты.</p>
+      <p><span class="tag">Большой экран</span> — фон: тропинка в джунглях, миникарта слева, карточка вопроса снизу. Декор: паутина, светлячки.</p>
+      <p><span class="tag">Телефон</span> — варианты ответов крупно. Помехи: скачущие ответы, перевёрнутый экран. Подсказка для отстающего.</p>
+      <p><strong>Шрифты:</strong> Cinzel / Nunito. <strong>Цвета:</strong> тёмно-зелёный + золото.</p>
     </div>
 
     <!-- Технический стек -->
     <h2>🛠️ Технический стек</h2>
     <div class="card">
       <ul>
-        <li><strong>Бэкенд:</strong> Node.js + Socket.io</li>
-        <li><strong>Фронтенд:</strong> React</li>
+        <li><strong>Бэкенд:</strong> Node.js + Express + Socket.io</li>
+        <li><strong>Фронтенд:</strong> React (экран ведущего и телефон)</li>
         <li><strong>Подключение:</strong> локальная сеть, QR-код с локальным IP</li>
         <li><strong>Вопросы:</strong> локальный JSON</li>
       </ul>
     </div>
 
-    <!-- План разработки -->
+    <!-- План разработки – с пометками о доработках -->
     <h2>📋 План разработки</h2>
     <div class="card">
       <ol>
-        <li><strong>Этап 1 — Скелет (1–2 нед.)</strong><br>Сервер, лобби, QR, выбор персонажа, один вопрос, позиции.</li>
-        <li><strong>Этап 2 — Основной маршрут (2–3 нед.)</strong><br>Цикл вопросов, миникарта, помехи, помощь, комментарии Ананси.</li>
-        <li><strong>Этап 3 — Мини-игры (2–3 нед.)</strong><br>Три тропинки, голосование, шпион, история, крокодил, триггеры.</li>
-        <li><strong>Этап 4 — Финальная гонка (1 нед.)</strong><br>Поле, стартовые позиции, механика первого ответа.</li>
-        <li><strong>Этап 5 — Полировка (2 нед.)</strong><br>Анимации, звуки, фон, пассивки, тестирование с живыми игроками.</li>
+        <li><strong>Этап 1 — Скелет</strong> (готов) — сервер, лобби, QR, выбор персонажа, один вопрос.</li>
+        <li><strong>Этап 2 — Основной маршрут</strong> (готов) — 11 вопросов, миникарта, помехи/помощь (требуют доработки UI и баланса).</li>
+        <li><strong>Этап 3 — Мини-игры</strong> (реализованы, но требуют доработки) — три тропинки, голосование, шпион, история Ананси, крокодил.</li>
+        <li><strong>Этап 4 — Финальная гонка</strong> (реализована, но требует доработки) — поле, стартовые позиции, механика первого ответа.</li>
+        <li><strong>Этап 5 — Полировка</strong> — анимации, звуки, пассивки, тестирование.</li>
       </ol>
     </div>
 
     <hr>
 
-    <!-- Нерешённые вопросы -->
-    <h2>❓ Нерешённые вопросы</h2>
+    <!-- Нерешённые вопросы (актуализированы) -->
+    <h2>❓ Нерешённые вопросы / Ближайшие задачи</h2>
     <div class="card" style="border-color: #d9783b;">
       <ul>
-        <li>🕸️ Пассивки персонажей</li>
-        <li>⏱️ Механика «первого ответа» в финале — метка времени на сервере или клиенте</li>
-        <li>🖼️ Финальный фон — нейронка, готовые ассеты или другое</li>
-        <li>🏎️ Механика финальной гонки — утверждена ли схема «первый правильный = 2 шага»</li>
+        <li>🔧 Доработка всех мини-игр (UI, таймеры, унификация очков).</li>
+        <li>🏁 Доработка финальной гонки (таймер, ничья, рандомизация вопросов, анимация).</li>
+        <li>⚡ Улучшение визуализации помех и помощи на телефонах.</li>
+        <li>🕷️ Пассивные способности персонажей (конкретные эффекты).</li>
       </ul>
     </div>
 
     <div style="text-align: center; margin-top: 2.5rem; font-family: 'Cinzel', serif; color: #d4af37; opacity: 0.8;">
-      ✦ Ананси плетёт свою сеть ✦
+      ✦ Ананси ждёт доработок ✦
     </div>
   </div>
 </body>
