@@ -1,154 +1,160 @@
 import React from 'react';
 
-const CHAR_EMOJI = { spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎' };
-const MINI_SPOTS = new Set([3, 6, 9, 12]);
-const TOTAL      = 15;
+// Визуальные слоты 1-15 (снизу вверх на карте, сверху вниз в рендере)
+// Слоты 4, 8, 12 = мини-игры; слот 15 = финальная гонка
+const TOTAL_SLOTS   = 15;
+const MINI_SLOTS    = new Set([4, 8, 12]);
 
-export default function MapPanel({ players, questionIndex = 0 }) {
-  const sorted   = [...players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
-  const leaderId = sorted[0]?.id;
+// Маппинг questionIndex (1-11) → визуальный слот
+// Q1=1, Q2=2, Q3=3, [мини=4], Q4=5, Q5=6, Q6=7, [мини=8],
+// Q7=9, Q8=10, Q9=11, [мини=12], Q10=13, Q11=14, [финал=15]
+const Q_TO_SLOT = [0, 1, 2, 3, 5, 6, 7, 9, 10, 11, 13, 14];
+//                0  1  2  3  4  5  6  7   8   9  10  11
 
-  // Слоты сверху вниз: ФИНИШ, 15, 14 … 1
+function currentVisualSlot(questionIndex, phase) {
+  if (phase === 'final_race' || phase === 'final_race_intro' || phase === 'winner') return 15;
+  if (questionIndex <= 0) return 0;
+  if (questionIndex > 11) return 14;
+  return Q_TO_SLOT[questionIndex] ?? questionIndex;
+}
+
+export default function MapPanel({ questionIndex = 0, phase = 'question' }) {
+  const curSlot = currentVisualSlot(questionIndex, phase);
+
+  // Рендерим сверху вниз: 🏁(15), 14, 13, ... 1
   const slots = [
-    { type: 'finish' },
-    ...Array.from({ length: TOTAL }, (_, i) => ({ type: 'step', q: TOTAL - i })),
+    { slot: 15, type: 'finish' },
+    ...Array.from({ length: TOTAL_SLOTS - 1 }, (_, i) => ({
+      slot: TOTAL_SLOTS - 1 - i,
+      type: MINI_SLOTS.has(TOTAL_SLOTS - 1 - i) ? 'mini' : 'step',
+    })),
   ];
 
   return (
     <div style={s.panel}>
+      <div style={s.title}>Прогресс</div>
 
-      {/* ── Трек ── */}
       <div style={s.track}>
-        {slots.map((slot, idx) => {
-          if (slot.type === 'finish') {
+        <div style={s.line} />
+
+        {slots.map(({ slot, type }) => {
+          const isDone = slot < curSlot;
+          const isCur  = slot === curSlot;
+
+          if (type === 'finish') {
             return (
-              <React.Fragment key="finish">
-                <div style={s.slotFinish}>🏁</div>
-                <div style={{ ...s.line, background: questionIndex > TOTAL ? '#2a5a22' : '#111f11' }}/>
-              </React.Fragment>
+              <div key="finish" style={{
+                ...s.dot, ...s.dotFinish,
+                ...(isCur ? s.dotCur : {}),
+                ...(isDone ? s.dotDone : {}),
+              }}>🏁</div>
             );
           }
 
-          const { q } = slot;
-          const isMini = MINI_SPOTS.has(q);
-          const isDone = q < questionIndex;
-          const isCur  = q === questionIndex;
-          const isLast = q === 1;
+          if (type === 'mini') {
+            return (
+              <div key={slot} style={{
+                ...s.dot,
+                ...(isDone ? s.dotMiniDone : s.dotMini),
+                ...(isCur  ? s.dotCur : {}),
+              }}>✦</div>
+            );
+          }
 
+          // Обычный шаг
           return (
-            <React.Fragment key={q}>
-              <div style={{
-                ...s.slot,
-                ...(isMini ? s.mini : {}),
-                ...(isDone ? s.done : {}),
-                ...(isCur  ? s.cur  : {}),
-              }}>
-                {isMini ? '★' : q}
-              </div>
-              {!isLast && (
-                <div style={{ ...s.line, background: isDone ? '#2a5a22' : '#111f11' }}/>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </div>
-
-      {/* ── Разделитель ── */}
-      <div style={s.sep}/>
-
-      {/* ── Таблица очков ── */}
-      <div style={s.label}>ОЧКИ</div>
-      <div style={s.scores}>
-        {sorted.map((p, i) => {
-          const score  = p.score ?? 0;
-          const isLead = p.id === leaderId;
-          return (
-            <div key={p.id} style={{
-              ...s.row,
-              opacity:     p.connected ? 1 : 0.35,
-              background:  isLead ? 'rgba(26,18,2,0.95)' : 'rgba(5,12,5,0.9)',
-              borderColor: isLead ? '#6a5412' : '#162614',
+            <div key={slot} style={{
+              ...s.dot,
+              ...(isDone ? s.dotDone : {}),
+              ...(isCur  ? s.dotCur  : {}),
             }}>
-              <span style={s.rank}>{i + 1}</span>
-              <span style={s.emo}>{CHAR_EMOJI[p.character] ?? '❓'}</span>
-              <div style={s.nameCol}>
-                <span style={{ ...s.name, color: isLead ? '#c8a830' : '#6aaa3a' }}>
-                  {p.name.length > 8 ? p.name.slice(0, 8) + '…' : p.name}
-                </span>
-                <div style={s.bar}>
-                  <div style={{
-                    ...s.fill,
-                    width: `${(score / TOTAL) * 100}%`,
-                    background: isLead ? '#c8a830' : '#3a7a28',
-                  }}/>
-                </div>
-              </div>
-              <span style={{ ...s.sc, color: isLead ? '#f0d060' : '#c8e8a0' }}>
-                {score}<span style={s.scOf}>/{TOTAL}</span>
-              </span>
+              {isCur  && <div style={{ ...s.inner, background: '#f3d779' }}/>}
+              {isDone && <div style={{ ...s.inner, background: '#6bc740' }}/>}
             </div>
           );
         })}
       </div>
-
-      {/* Легенда */}
-      <div style={s.legend}><span style={{ color: '#c8a830' }}>★</span> мини-игра</div>
     </div>
   );
 }
 
+const DOT = 'clamp(16px, 2.4vh, 28px)';
+
 const s = {
   panel: {
-    width: 200, flexShrink: 0,
-    background: 'rgba(2,7,2,0.92)',
-    borderRight: '1px solid #122212',
+    width: 190, flexShrink: 0,
+    background: 'rgba(4,9,3,.85)',
+    borderRight: '1px solid rgba(212,175,55,.15)',
     display: 'flex', flexDirection: 'column',
     alignItems: 'center',
-    padding: '56px 10px 14px',     // большой отступ сверху → трек смещается вниз
-    backdropFilter: 'blur(10px)',
-    gap: 6,
-    overflowY: 'auto', scrollbarWidth: 'none',
+    padding: '1.4vh 0 1.4vh',
+    gap: '0.6vh',
   },
-
-  track: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
+  title: {
+    fontFamily: "'Cinzel',serif",
+    fontSize: 'clamp(11px,1vw,16px)',
+    color: '#c7a84b', letterSpacing: '.1em',
+    textTransform: 'uppercase', opacity: .8,
     flexShrink: 0,
   },
-  line: { width: 2, height: 7, borderRadius: 1, transition: 'background .4s', flexShrink: 0 },
-
-  slot: {
-    width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-    border: '1.5px solid #1c3618', background: '#070d07',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 9, fontWeight: 700, fontFamily: "'Cinzel',serif",
-    color: '#243820', transition: 'all .35s',
+  track: {
+    flex: 1, minHeight: 0,
+    display: 'flex', flexDirection: 'column',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    position: 'relative',
   },
-  mini: { borderColor: '#6a5412', color: '#c8a830', background: '#100d00', fontSize: 12 },
-  done: { borderColor: '#2e6822', color: '#4a9a30', background: '#0b1c09' },
-  cur:  { borderColor: '#c8a830', color: '#f0d060', background: 'rgba(200,168,48,0.14)', width: 30, height: 30, fontSize: 11, boxShadow: '0 0 10px rgba(200,168,48,0.35)' },
-  slotFinish: {
-    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-    border: '1.5px solid #c8a830', background: '#0a1804',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 14,
+  line: {
+    position: 'absolute',
+    left: '50%', top: 8, bottom: 8,
+    width: 2,
+    background: 'linear-gradient(180deg,rgba(212,175,55,.55),rgba(212,175,55,.1))',
+    transform: 'translateX(-50%)',
+    zIndex: 0,
   },
-
-  sep:    { width: '88%', height: 1, background: '#122212', flexShrink: 0, margin: '4px 0' },
-  label:  { fontSize: 7, letterSpacing: 3, color: '#2a4a20', textTransform: 'uppercase', fontFamily: "'Cinzel',serif", flexShrink: 0 },
-
-  scores: { width: '100%', display: 'flex', flexDirection: 'column', gap: 4, flexShrink: 0 },
-  row: {
-    display: 'flex', alignItems: 'center', gap: 5,
-    border: '1px solid', borderRadius: 8, padding: '5px 7px',
+  dot: {
+    width: DOT, height: DOT,
+    borderRadius: '50%',
+    border: '1.5px solid rgba(212,175,55,.22)',
+    background: '#0e1a0b',
+    position: 'relative', zIndex: 1, flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 'clamp(7px,0.85vh,11px)',
+    color: 'rgba(212,175,55,.35)',
     transition: 'all .4s',
   },
-  rank:    { fontSize: 8, color: '#283e20', minWidth: 10, fontFamily: "'Cinzel',serif" },
-  emo:     { fontSize: 14, lineHeight: 1, flexShrink: 0 },
-  nameCol: { flex: 1, display: 'flex', flexDirection: 'column', gap: 3, overflow: 'hidden', minWidth: 0 },
-  name:    { fontSize: 10, fontFamily: "'Nunito',sans-serif", overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', transition: 'color .4s' },
-  bar:     { width: '100%', height: 3, background: '#0a140a', borderRadius: 2, overflow: 'hidden' },
-  fill:    { height: '100%', borderRadius: 2, transition: 'width .6s ease' },
-  sc:      { fontFamily: "'Cinzel',serif", fontSize: 12, minWidth: 26, textAlign: 'right', flexShrink: 0 },
-  scOf:    { fontSize: 8, color: '#2e4a20' },
-  legend:  { fontSize: 8, color: '#2e4820', marginTop: 2 },
+  dotFinish: {
+    fontSize: 'clamp(10px,1.3vh,16px)',
+    border: '2px solid rgba(212,175,55,.6)',
+    background: '#1a2a08',
+    color: 'unset',
+  },
+  dotDone: {
+    background: '#1e3010',
+    borderColor: 'rgba(107,199,64,.55)',
+    color: 'rgba(107,199,64,.3)',
+  },
+  dotMini: {
+    borderColor: 'rgba(212,175,55,.6)',
+    background: '#1e2c10',
+    color: 'rgba(212,175,55,.9)',
+  },
+  dotMiniDone: {
+    borderColor: 'rgba(107,199,64,.55)',
+    background: '#1e3010',
+    color: 'rgba(107,199,64,.75)',
+  },
+  dotCur: {
+    background: '#2a4018',
+    borderColor: '#d4af37',
+    borderWidth: 2,
+    boxShadow: '0 0 10px rgba(212,175,55,.5), 0 0 20px rgba(212,175,55,.2)',
+  },
+  inner: {
+    width: 'clamp(5px,0.7vh,9px)',
+    height: 'clamp(5px,0.7vh,9px)',
+    borderRadius: '50%',
+    position: 'absolute',
+  },
 };

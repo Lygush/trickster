@@ -8,9 +8,18 @@ const CHARACTERS = [
   { id: 'lizard',  emoji: '🦎', name: 'Ящерица' },
 ];
 
-const TOTAL_QUESTIONS = 15;            // фиксированное число вопросов в раунде
-const MINIGAME_SPOTS  = [3, 6, 9, 12]; // после этих вопросов — мини-игра
-const FINAL_STEPS     = 12;            // шагов до победы в финальной гонке
+const TOTAL_QUESTIONS  = 11;       // вопросов всего (без мини-игр)
+const FINAL_STEPS      = 12;       // шагов до победы в финальной гонке
+
+// После какого вопроса (questionIndex) триггерится мини-игра
+const MINIGAME_SPOTS   = [3, 6, 9]; // Q3→короткая, Q6→длинная, Q9→короткая
+
+// Короткие и длинные мини-игры
+const SHORT_MINIGAMES  = ['three_paths', 'personality_vote', 'crocodile'];
+const LONG_MINIGAMES   = ['spy', 'aanansi_story'];
+
+// Для обратной совместимости
+const TOTAL_SLOTS      = 15;       // визуальных слотов в мини-карте
 
 // Псевдоним для обратной совместимости с импортами
 const ROUTE_LENGTH = TOTAL_QUESTIONS;
@@ -147,8 +156,9 @@ function publicState(game) {
 
   return {
     phase:           game.phase,
-    questionIndex:   game.questionIndex,   // ← клиент знает какой вопрос по счёту
-    totalQuestions:  TOTAL_QUESTIONS,
+    questionIndex:  game.questionIndex,
+    totalQuestions: TOTAL_QUESTIONS,
+    totalSlots:     TOTAL_SLOTS,
     players: getPlayers(game).map(p => ({
       id:             p.id,
       name:           p.name,
@@ -180,9 +190,12 @@ function resetGameState(game) {
 
 module.exports = {
   CHARACTERS,
-  ROUTE_LENGTH,      // псевдоним = TOTAL_QUESTIONS
+  ROUTE_LENGTH,
   TOTAL_QUESTIONS,
+  TOTAL_SLOTS,
   MINIGAME_SPOTS,
+  SHORT_MINIGAMES,
+  LONG_MINIGAMES,
   FINAL_STEPS,
   createGame,
   createPlayer,

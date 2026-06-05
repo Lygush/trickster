@@ -12,22 +12,21 @@ import useAssets     from './hooks/useAssets';
 import useSounds     from './hooks/useSounds';
 
 const SERVER_URL  = process.env.REACT_APP_SERVER_URL || window.location.origin;
-const TOTAL_Q     = 15;
 const ANSWER_TIME = 30;
 const CHAR_EMOJI  = { spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎' };
 const LETTERS     = ['А', 'Б', 'В', 'Г'];
 
-// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [gameState,  setGameState]  = useState(null);
-  const [serverInfo, setServerInfo] = useState(null);
-  const [revealData, setRevealData] = useState(null);
-  const [answers,    setAnswers]    = useState({});
-  const [winner,     setWinner]     = useState(null);
-  const [qrUrl,      setQrUrl]      = useState(null);
+  const [gameState,   setGameState]   = useState(null);
+  const [serverInfo,  setServerInfo]  = useState(null);
+  const [revealData,  setRevealData]  = useState(null);
+  const [answers,     setAnswers]     = useState({});
+  const [winner,      setWinner]      = useState(null);
+  const [qrUrl,       setQrUrl]       = useState(null);
   const [questionNum, setQuestionNum] = useState(0);
-  const lastQuestionId = useRef(null);
+
   const socketRef      = useRef(null);
+  const lastQuestionId = useRef(null);
   const assets = useAssets();
   const sounds = useSounds(assets);
 
@@ -87,7 +86,7 @@ export default function App() {
   const phase          = gameState?.phase   || 'lobby';
   const players        = gameState?.players || [];
   const currentMinigame = gameState?.currentMinigame;
-  const showMap        = ['question', 'question_result'].includes(phase);
+  const isQuestionPhase = phase === 'question' || phase === 'question_result';
 
   return (
     <div style={s.root}>
@@ -95,66 +94,79 @@ export default function App() {
 
       <div style={s.layout}>
 
-        {/* ── Левая колонка: карта ── */}
-        {showMap && (
-          <MapPanel
-            players={players}
-            questionIndex={gameState?.questionIndex || 0}
-          />
+        {/* ═══ ТОПБАР ═══ */}
+        {isQuestionPhase && (
+          <Topbar players={players} answers={answers} revealData={phase === 'question_result' ? revealData : null} />
         )}
 
-        {/* ── Главная зона ── */}
-        <div style={s.main}>
+        {/* ═══ ТЕЛО ═══ */}
+        <div style={s.body}>
 
-          {/* LOBBY */}
-          {(phase === 'lobby' || phase === 'character_select') && (
-            <LobbyScreen
-              players={players} qrUrl={qrUrl}
-              serverInfo={serverInfo} onStart={handleStart} assets={assets}
-            />
-          )}
-
-          {/* INTRO */}
-          {phase === 'intro' && (
-            <div style={s.centered}>
-              <div style={s.bigSpider}>🕸️</div>
-              <div style={s.titleText}>Ананси плетёт свою сеть</div>
-              <div style={s.subText}>Приготовьтесь...</div>
-            </div>
-          )}
-
-          {/* ВОПРОС */}
-          {(phase === 'question' || phase === 'question_result') && gameState?.currentQuestion && (
-            <QuestionPhase
+          {/* Минимапа */}
+          {isQuestionPhase && (
+            <MapPanel
               players={players}
-              answers={answers}
-              question={gameState.currentQuestion}
-              questionNum={questionNum}
-              revealData={phase === 'question_result' ? revealData : null}
+              questionIndex={gameState?.questionIndex || 0}
             />
           )}
 
-          {/* МИНИ-ИГРА ИНТРО */}
-          {phase === 'minigame_intro' && <MinigameIntro minigame={currentMinigame} />}
+          {/* Правая зона */}
+          <div style={s.right}>
 
-          {/* МИНИ-ИГРА */}
-          {phase === 'minigame' && (() => {
-            const ScreenView = MINIGAMES[currentMinigame?.id]?.ScreenView;
-            return ScreenView
-              ? <ScreenView minigame={currentMinigame} players={players} assets={assets} sounds={sounds} />
-              : <MinigameIntro minigame={currentMinigame} waiting />;
-          })()}
+            {/* LOBBY */}
+            {(phase === 'lobby' || phase === 'character_select') && (
+              <LobbyScreen players={players} qrUrl={qrUrl} serverInfo={serverInfo} onStart={handleStart} assets={assets} />
+            )}
 
-          {/* ФИНАЛЬНАЯ ГОНКА */}
-          {(phase === 'final_race_intro' || phase === 'final_race') && (
-            <FinalRaceView gameState={gameState} players={players} />
-          )}
+            {/* INTRO */}
+            {phase === 'intro' && (
+              <div style={s.centered}>
+                <div style={s.bigIcon}>🕸️</div>
+                <div style={s.titleText}>Ананси плетёт свою сеть</div>
+                <div style={s.subText}>Приготовьтесь...</div>
+              </div>
+            )}
 
-          {/* ПОБЕДИТЕЛЬ */}
-          {phase === 'winner' && winner && (
-            <WinnerScreen winner={winner} players={players} onReset={handleReset} assets={assets} />
-          )}
+            {/* ВОПРОС */}
+            {isQuestionPhase && gameState?.currentQuestion && (
+              <>
+                <div style={s.spacer} />
+                <div style={s.bottomZone}>
+                  <TimerBar
+                    questionId={gameState.currentQuestion.id}
+                    paused={phase === 'question_result'}
+                  />
+                  <QuestionCard
+                    key={gameState.currentQuestion.id}
+                    question={gameState.currentQuestion}
+                    revealData={phase === 'question_result' ? revealData : null}
+                  />
+                </div>
+              </>
+            )}
 
+            {/* МИНИ-ИГРА ИНТРО */}
+            {phase === 'minigame_intro' && <MinigameIntro minigame={currentMinigame} />}
+
+            {/* МИНИ-ИГРА */}
+            {phase === 'minigame' && (() => {
+              const ScreenView = MINIGAMES[currentMinigame?.id]?.ScreenView;
+              return ScreenView
+                ? <ScreenView minigame={currentMinigame} players={players} assets={assets} sounds={sounds} />
+                : <MinigameIntro minigame={currentMinigame} waiting />;
+            })()}
+
+            {/* ФИНАЛЬНАЯ ГОНКА */}
+            {(phase === 'final_race_intro' || phase === 'final_race') && (
+              <FinalRace gameState={gameState} players={players} />
+            )}
+
+            {/* ПОБЕДИТЕЛЬ */}
+            {phase === 'winner' && winner && (
+              <WinnerScreen winner={winner} players={players} onReset={handleReset} assets={assets} />
+            )}
+
+          </div>
         </div>
       </div>
     </div>
@@ -162,106 +174,92 @@ export default function App() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QuestionPhase: вся фаза вопроса в одном компоненте
+// Topbar
 // ─────────────────────────────────────────────────────────────────────────────
-function QuestionPhase({ players, answers, question, questionNum, revealData }) {
+function Topbar({ players, answers, revealData }) {
   const sorted   = [...players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const leaderId = sorted[0]?.id;
   const answered = new Set(Object.keys(answers || {}));
 
   return (
-    <div style={qp.wrap}>
-
-      {/* ── Верхняя строка: бейдж + номер вопроса ── */}
-      <div style={qp.topRow}>
-        <div style={qp.badge}>🕷️&nbsp;&nbsp;Ананси спрашивает</div>
-        <div style={qp.qnum}>Вопрос {questionNum} из {TOTAL_Q}</div>
-      </div>
-
-      {/* ── Игроки ── */}
-      <div style={qp.players}>
+    <div style={tb.bar}>
+      <div style={tb.pill}>🕷 Ананси спрашивает</div>
+      <div style={tb.chips}>
         {sorted.map(p => {
           const isLead      = p.id === leaderId;
           const hasAnswered = answered.has(p.id);
-          let result = null;
+          let dot = null;
           if (revealData && hasAnswered) {
-            result = Number(answers[p.id]?.answerIndex) === revealData.correctIndex ? 'correct' : 'wrong';
+            const ok = Number(answers[p.id]?.answerIndex) === revealData.correctIndex;
+            dot = ok ? '✓' : '✗';
           } else if (hasAnswered) {
-            result = 'answered';
+            dot = '·';
           }
-
           return (
-            <div key={p.id} style={qp.player}>
-              {/* Счёт */}
-              <div style={{ ...qp.score, color: isLead ? '#f0d060' : '#8acc50' }}>
-                {p.score ?? 0}<span style={qp.scoreOf}>/{TOTAL_Q}</span>
+            <div key={p.id} style={{
+              ...tb.chip,
+              borderColor: isLead ? 'rgba(212,175,55,.45)' : 'rgba(107,199,64,.18)',
+              background:  isLead ? 'rgba(30,20,2,.55)'    : 'rgba(5,12,4,.5)',
+            }}>
+              <div style={{ ...tb.av, borderColor: isLead ? '#d4af37' : 'rgba(107,199,64,.4)' }}>
+                {CHAR_EMOJI[p.character] || '?'}
               </div>
-
-              {/* Аватар */}
-              <div style={{
-                ...qp.avatar,
-                borderColor: result === 'correct' ? '#5a9a30'
-                           : result === 'wrong'   ? '#c84830'
-                           : result === 'answered' ? '#5a9a30'
-                           : isLead ? '#c8a830' : '#1e3e1c',
-                boxShadow: isLead && !result ? '0 0 16px rgba(200,168,48,0.4)' : 'none',
-                background: isLead ? 'rgba(28,20,2,0.9)' : 'rgba(8,16,8,0.88)',
-              }}>
-                <span style={qp.emoji}>{CHAR_EMOJI[p.character] || '?'}</span>
-                {result && (
-                  <div style={{
-                    ...qp.dot,
-                    background: result === 'correct' ? '#5a9a30' : result === 'wrong' ? '#c84830' : '#3a7a28',
-                  }}>
-                    {result === 'correct' ? '✓' : result === 'wrong' ? '✗' : '•'}
-                  </div>
-                )}
-              </div>
-
-              {/* Имя */}
-              <div style={{ ...qp.name, color: isLead ? '#c8a830' : '#587848' }}>
-                {p.name.length > 7 ? p.name.slice(0, 7) + '…' : p.name}
-              </div>
+              <span style={{ ...tb.name, color: isLead ? '#d4af37' : 'rgba(150,220,90,.6)' }}>
+                {p.name.length > 7 ? p.name.slice(0,7)+'…' : p.name}
+              </span>
+              <span style={tb.score}>{p.score ?? 0}</span>
+              {dot && (
+                <span style={{
+                  ...tb.dot,
+                  color: dot === '✓' ? '#6bc740' : dot === '✗' ? '#e05050' : '#6bc740',
+                }}>{dot}</span>
+              )}
             </div>
           );
         })}
       </div>
-
-      {/* ── Вопрос + таймер ── */}
-      <div style={qp.card}>
-        <div style={qp.questionRow}>
-          <div style={qp.questionText}>{question.text}</div>
-          <Timer questionId={question.id} paused={!!revealData} />
-        </div>
-
-        <div style={qp.answersGrid}>
-          {question.answers.map((ans, i) => {
-            const isCorrect = revealData && i === revealData.correctIndex;
-            const isWrong   = revealData && i !== revealData.correctIndex;
-            return (
-              <div key={i} style={{
-                ...qp.ans,
-                ...(isCorrect ? qp.ansCorrect : {}),
-                ...(isWrong   ? qp.ansWrong   : {}),
-              }}>
-                <div style={{ ...qp.letter, ...(isCorrect ? qp.letterOk : {}) }}>
-                  {LETTERS[i]}
-                </div>
-                <span>{ans}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
     </div>
   );
 }
 
+const tb = {
+  bar: {
+    height: '8vh', minHeight: 52, maxHeight: 80,
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    background: 'rgba(4,10,3,.82)',
+    borderBottom: '1px solid rgba(212,175,55,.15)',
+    padding: '0 2vw', gap: '1.5vw',
+    flexShrink: 0, zIndex: 20, position: 'relative',
+  },
+  pill: {
+    fontFamily: "'Cinzel',serif",
+    fontSize: 'clamp(14px,1.4vw,22px)',
+    color: '#c7a84b', letterSpacing: '.06em',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  },
+  chips: { display: 'flex', alignItems: 'center', gap: '1vw', flexWrap: 'nowrap' },
+  chip: {
+    display: 'flex', alignItems: 'center', gap: '0.4vw',
+    border: '1px solid', borderRadius: 30,
+    padding: '0.5vh 1.2vw 0.5vh 0.6vw',
+    transition: 'border-color .3s, background .3s',
+  },
+  av: {
+    width: '4vh', height: '4vh', minWidth: 28, minHeight: 28,
+    borderRadius: '50%', border: '1px solid',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: 'clamp(14px,2.2vh,26px)', background: '#1a2e10',
+    flexShrink: 0,
+  },
+  name:  { fontSize: 'clamp(12px,1.2vw,20px)', fontFamily: "'Cinzel',serif", whiteSpace: 'nowrap' },
+  score: { fontSize: 'clamp(14px,1.5vw,24px)', color: '#9de05a', fontWeight: 700, marginLeft: '0.4vw' },
+  dot:   { fontSize: 'clamp(8px,0.8vw,11px)', fontWeight: 900, marginLeft: '0.1vw' },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Timer
+// TimerBar
 // ─────────────────────────────────────────────────────────────────────────────
-function Timer({ questionId, paused }) {
+function TimerBar({ questionId, paused }) {
   const [t, setT] = useState(ANSWER_TIME);
   const ref = useRef(null);
 
@@ -276,24 +274,138 @@ function Timer({ questionId, paused }) {
     return () => clearInterval(ref.current);
   }, [questionId, paused]);
 
-  const pct   = (t / ANSWER_TIME) * 100;
-  const color = t <= 6 ? '#c84830' : t <= 12 ? '#c8a830' : '#5a9a30';
+  const pct = (t / ANSWER_TIME) * 100;
+  const isDanger  = t <= 8;
+  const isWarning = t <= 14 && !isDanger;
+  const numColor  = isDanger ? '#f06060' : isWarning ? '#f0a040' : '#c6f060';
+  const barGrad   = isDanger
+    ? 'linear-gradient(90deg,#c03030,#f06060)'
+    : isWarning
+      ? 'linear-gradient(90deg,#c08020,#f0c060)'
+      : 'linear-gradient(90deg,#6bc740,#c6f060)';
+
   return (
-    <div style={tr.wrap}>
-      <div style={{ ...tr.num, color }}>{t}</div>
-      <div style={tr.track}><div style={{ ...tr.fill, width: `${pct}%`, background: color }}/></div>
+    <div style={tm.row}>
+      {/* Левая полоска — уменьшается справа налево */}
+      <div style={tm.barWrap}>
+        <div style={{ ...tm.fill, ...tm.fillLeft, width: `${pct}%`, background: barGrad }} />
+      </div>
+
+      {/* Число по центру */}
+      <div style={{ ...tm.num, color: numColor }}>{t}</div>
+
+      {/* Правая полоска — уменьшается слева направо */}
+      <div style={tm.barWrap}>
+        <div style={{ ...tm.fill, width: `${pct}%`, background: barGrad }} />
+      </div>
     </div>
   );
 }
 
+const tm = {
+  row: {
+    display: 'flex', alignItems: 'center',
+    gap: '1.5vw', width: '100%',
+  },
+  num: {
+    fontFamily: "'Cinzel',serif",
+    fontSize: 'clamp(36px,4.2vw,64px)',
+    fontWeight: 700, lineHeight: 1,
+    minWidth: '4.5vw', textAlign: 'center',
+    transition: 'color .5s', flexShrink: 0,
+  },
+  /* Контейнер полоски */
+  barWrap: {
+    flex: 1,
+    height: '1.4vh', minHeight: 8,
+    background: 'rgba(255,255,255,.1)',
+    borderRadius: 4, overflow: 'hidden',
+    display: 'flex', alignItems: 'center',
+  },
+  fill: {
+    height: '100%', borderRadius: 4,
+    transition: 'width 1s linear, background .5s',
+    flexShrink: 0,
+  },
+  /* Левая полоска — прижата к правому краю контейнера, убывает справа налево */
+  fillLeft: { marginLeft: 'auto' },
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
-// FinalRaceView
+// QuestionCard
 // ─────────────────────────────────────────────────────────────────────────────
-function FinalRaceView({ gameState, players }) {
+function QuestionCard({ question, revealData }) {
+  if (!question) return null;
+  return (
+    <div style={qc.card}>
+      <div style={qc.text}>{question.text}</div>
+      <div style={qc.grid}>
+        {question.answers.map((ans, i) => {
+          const isCorrect = revealData != null && i === revealData.correctIndex;
+          const isWrong   = revealData != null && i !== revealData.correctIndex;
+          return (
+            <div key={i} style={{
+              ...qc.ans,
+              ...(isCorrect ? qc.ansOk   : {}),
+              ...(isWrong   ? qc.ansWrong : {}),
+            }}>
+              <div style={{ ...qc.key, ...(isCorrect ? qc.keyOk : {}) }}>{LETTERS[i]}</div>
+              <span style={qc.ansText}>{ans}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const qc = {
+  card: {
+    background: 'rgba(6,16,4,.9)',
+    border: '1px solid rgba(212,175,55,.2)',
+    borderRadius: '1.2vw',
+    padding: '2.2vh 2.2vw',
+    backdropFilter: 'blur(10px)',
+    boxShadow: '0 6px 32px rgba(0,0,0,.55)',
+  },
+  text: {
+    fontFamily: "'Cinzel',serif",
+    fontSize: 'clamp(24px,2.8vw,44px)',
+    color: '#e8f5d0', fontWeight: 700,
+    lineHeight: 1.45, marginBottom: '1.4vh',
+  },
+  grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2vh 1.2vw' },
+  ans: {
+    background: 'rgba(20,36,14,.82)',
+    border: '1px solid rgba(107,199,64,.22)',
+    borderRadius: '0.9vw',
+    padding: '1.6vh 1.8vw',
+    display: 'flex', alignItems: 'center', gap: '0.6vw',
+    transition: 'all .3s',
+  },
+  ansOk:   { borderColor: 'rgba(107,199,64,.7)', background: 'rgba(20,55,10,.92)', boxShadow: '0 0 12px rgba(107,199,64,.2)' },
+  ansWrong:{ opacity: 0.28 },
+  key: {
+    width: 'clamp(34px,4vh,54px)', height: 'clamp(34px,4vh,54px)',
+    borderRadius: '50%', flexShrink: 0,
+    background: 'rgba(107,199,64,.12)', border: '1.5px solid rgba(107,199,64,.3)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: "'Cinzel',serif",
+    fontSize: 'clamp(14px,1.6vw,24px)',
+    fontWeight: 700, color: '#9de05a',
+  },
+  keyOk:   { background: 'rgba(107,199,64,.25)', borderColor: 'rgba(107,199,64,.7)', color: '#c6f060' },
+  ansText: { fontFamily: "'Nunito',sans-serif", fontSize: 'clamp(16px,1.6vw,26px)', color: '#c8e8a0', lineHeight: 1.3 },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FinalRace
+// ─────────────────────────────────────────────────────────────────────────────
+function FinalRace({ gameState, players }) {
   const fr = gameState?.finalRace;
   return (
     <div style={s.centered}>
-      <div style={{ fontSize: 56 }}>🏁</div>
+      <div style={s.bigIcon}>🏁</div>
       <div style={s.titleText}>Финальная гонка!</div>
       {fr?.currentQuestion && (
         <div style={s.finalCard}>
@@ -301,18 +413,17 @@ function FinalRaceView({ gameState, players }) {
         </div>
       )}
       {fr?.positions && (
-        <div style={s.finalPositions}>
+        <div style={s.finalList}>
           {[...players]
             .sort((a, b) => (fr.positions[b.id] || 0) - (fr.positions[a.id] || 0))
             .map(p => {
               const pos = fr.positions[p.id] || 0;
-              const pct = Math.min((pos / 12) * 100, 100);
               return (
                 <div key={p.id} style={s.finalRow}>
-                  <span style={{ fontSize: 20 }}>{CHAR_EMOJI[p.character] || '?'}</span>
+                  <span>{CHAR_EMOJI[p.character] || '?'}</span>
                   <span style={s.finalName}>{p.name}</span>
                   <div style={s.finalBar}>
-                    <div style={{ ...s.finalFill, width: `${pct}%` }}/>
+                    <div style={{ ...s.finalFill, width: `${Math.min((pos / 12) * 100, 100)}%` }}/>
                   </div>
                   <span style={s.finalPos}>{pos}</span>
                 </div>
@@ -325,7 +436,7 @@ function FinalRaceView({ gameState, players }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CharAvatar (экспорт для других компонентов)
+// CharAvatar (экспорт для дочерних компонентов)
 // ─────────────────────────────────────────────────────────────────────────────
 export function CharAvatar({ character, assets, size = 32, style = {} }) {
   const imgUrl = character ? assets?.characters?.[character] : null;
@@ -337,118 +448,27 @@ export function CharAvatar({ character, assets, size = 32, style = {} }) {
 // Стили
 // ─────────────────────────────────────────────────────────────────────────────
 const s = {
-  root:   { height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-  layout: { display: 'flex', flex: 1, position: 'relative', zIndex: 1, overflow: 'hidden', height: '100vh' },
-  main:   { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-
-  centered:  { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 20 },
-  bigSpider: { fontSize: 72, animation: 'pulse 2s infinite' },
-  titleText: { fontFamily: "'Cinzel',serif", fontSize: 'clamp(22px,4vw,46px)', color: '#f0d060', letterSpacing: 2, textShadow: '0 0 30px rgba(200,168,48,0.4)' },
-  subText:   { fontSize: 14, color: '#5a9a30', letterSpacing: 2, textTransform: 'uppercase' },
-
-  finalCard:      { background: 'rgba(4,12,5,0.85)', border: '1px solid #1c3a1a', borderRadius: 14, padding: '16px 28px', backdropFilter: 'blur(10px)', maxWidth: 640 },
-  finalQ:         { fontFamily: "'Cinzel',serif", fontSize: 'clamp(14px,1.8vw,22px)', color: '#d8f0b0' },
-  finalPositions: { display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 520, background: 'rgba(4,12,5,0.85)', border: '1px solid #1c3a1a', borderRadius: 14, padding: '14px 18px', backdropFilter: 'blur(10px)' },
-  finalRow:       { display: 'flex', alignItems: 'center', gap: 10 },
-  finalName:      { fontSize: 13, color: '#8acc50', minWidth: 80, fontFamily: "'Nunito',sans-serif" },
-  finalBar:       { flex: 1, height: 7, background: '#0f2010', borderRadius: 4, overflow: 'hidden' },
-  finalFill:      { height: '100%', background: '#5a9a30', borderRadius: 4, transition: 'width .5s ease' },
-  finalPos:       { fontSize: 13, color: '#d8f0b0', minWidth: 24, textAlign: 'right', fontFamily: "'Cinzel',serif" },
-};
-
-// QuestionPhase styles
-const qp = {
-  wrap: {
-    display: 'flex', flexDirection: 'column',
-    height: '100%', padding: '16px 28px 24px 24px', gap: 12,
+  root:   { height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' },
+  layout: { display: 'flex', flexDirection: 'column', flex: 1, position: 'relative', zIndex: 1, overflow: 'hidden' },
+  body:   { display: 'flex', flex: 1, overflow: 'hidden' },
+  right:  { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  spacer: { flex: 1 },
+  bottomZone: {
+    padding: '0 2.5vw 2.5vh',
+    display: 'flex', flexDirection: 'column', gap: '1.4vh',
   },
 
-  // Верхняя строка
-  topRow: { display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 },
-  badge: {
-    fontSize: 12, letterSpacing: 2.5, color: '#7acc50',
-    textTransform: 'uppercase', border: '1px solid #2a5a22',
-    padding: '5px 16px', borderRadius: 20,
-    background: 'rgba(10,30,10,0.7)', backdropFilter: 'blur(6px)',
-    fontFamily: "'Cinzel',serif", flexShrink: 0,
-  },
-  qnum: {
-    fontSize: 11, color: '#3a6028', letterSpacing: 1.5,
-    fontFamily: "'Cinzel',serif",
-  },
+  centered: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 20 },
+  bigIcon:  { fontSize: 'clamp(48px,7vw,96px)', animation: 'pulse 2s infinite' },
+  titleText:{ fontFamily: "'Cinzel',serif", fontSize: 'clamp(20px,3.5vw,52px)', color: '#f0d060', letterSpacing: 2, textShadow: '0 0 30px rgba(200,168,48,.4)' },
+  subText:  { fontSize: 'clamp(10px,1vw,16px)', color: '#5a9a30', letterSpacing: 3, textTransform: 'uppercase' },
 
-  // Игроки
-  players: {
-    display: 'flex', gap: 14, alignItems: 'flex-end',
-    flexShrink: 0, flexWrap: 'nowrap',
-    overflowX: 'auto', scrollbarWidth: 'none',
-    paddingBottom: 4,
-  },
-  player: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, flexShrink: 0 },
-  score:  { fontFamily: "'Cinzel',serif", fontSize: 13, lineHeight: 1 },
-  scoreOf:{ fontSize: 8, color: '#2e4a22' },
-  avatar: {
-    width: 52, height: 52, borderRadius: '50%',
-    border: '2px solid', position: 'relative',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    transition: 'border-color .3s, box-shadow .3s, background .3s',
-  },
-  emoji:  { fontSize: 24, lineHeight: 1 },
-  dot:    {
-    position: 'absolute', bottom: -2, right: -2,
-    width: 16, height: 16, borderRadius: '50%',
-    border: '2px solid #040c05',
-    fontSize: 8, color: '#fff', fontWeight: 900,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-  },
-  name:   { fontSize: 10, fontFamily: "'Nunito',sans-serif", textAlign: 'center', maxWidth: 56 },
-
-  // Карточка вопроса
-  card: {
-    flex: 1, display: 'flex', flexDirection: 'column', gap: 14,
-    background: 'rgba(3,10,4,0.88)', border: '1px solid #1a3818',
-    borderRadius: 18, padding: '20px 24px',
-    backdropFilter: 'blur(14px)',
-    boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-    minHeight: 0,
-  },
-  questionRow: { display: 'flex', alignItems: 'flex-start', gap: 20 },
-  questionText:{
-    flex: 1,
-    fontFamily: "'Cinzel',serif",
-    fontSize: 'clamp(17px, 2vw, 28px)',
-    color: '#d8f0b0', lineHeight: 1.5,
-  },
-  answersGrid: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
-    flex: 1, minHeight: 0,
-  },
-  ans: {
-    background: 'rgba(8,18,8,0.8)', border: '1px solid #1c3a18',
-    borderRadius: 12, padding: '12px 16px',
-    color: '#7ab058', fontSize: 'clamp(12px,1.3vw,18px)',
-    display: 'flex', alignItems: 'center', gap: 12,
-    transition: 'all .3s',
-  },
-  ansCorrect: {
-    borderColor: '#5a9a30', background: 'rgba(15,45,8,0.92)',
-    color: '#8acc40', boxShadow: '0 0 18px rgba(90,154,48,0.25)',
-  },
-  ansWrong: { opacity: 0.25 },
-  letter: {
-    width: 28, height: 28, borderRadius: '50%',
-    background: '#0a1a0c', border: '1px solid #2a4a20',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: 12, color: '#4a8a30', flexShrink: 0,
-    fontWeight: 700, fontFamily: "'Cinzel',serif",
-  },
-  letterOk: { background: '#122a0a', borderColor: '#5a9a30', color: '#8acc40' },
-};
-
-// Timer styles
-const tr = {
-  wrap:  { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, flexShrink: 0 },
-  num:   { fontFamily: "'Cinzel',serif", fontSize: 42, lineHeight: 1, transition: 'color .4s', minWidth: 52, textAlign: 'center' },
-  track: { width: 52, height: 4, background: '#0f2010', borderRadius: 2, overflow: 'hidden' },
-  fill:  { height: '100%', borderRadius: 2, transition: 'width 1s linear, background .5s' },
+  finalCard:  { background: 'rgba(4,12,5,.88)', border: '1px solid rgba(212,175,55,.2)', borderRadius: 14, padding: '14px 26px', backdropFilter: 'blur(10px)', maxWidth: 640 },
+  finalQ:     { fontFamily: "'Cinzel',serif", fontSize: 'clamp(13px,1.6vw,22px)', color: '#e8f5d0' },
+  finalList:  { display: 'flex', flexDirection: 'column', gap: 8, width: '100%', maxWidth: 500, background: 'rgba(4,12,5,.88)', border: '1px solid rgba(212,175,55,.2)', borderRadius: 14, padding: '14px 18px', backdropFilter: 'blur(10px)' },
+  finalRow:   { display: 'flex', alignItems: 'center', gap: 10, fontSize: 20 },
+  finalName:  { fontSize: 13, color: '#8acc50', minWidth: 80, fontFamily: "'Nunito',sans-serif" },
+  finalBar:   { flex: 1, height: 7, background: '#0f2010', borderRadius: 4, overflow: 'hidden' },
+  finalFill:  { height: '100%', background: '#6bc740', borderRadius: 4, transition: 'width .5s ease' },
+  finalPos:   { fontSize: 13, color: '#d8f0b0', minWidth: 24, textAlign: 'right', fontFamily: "'Cinzel',serif" },
 };

@@ -8,7 +8,8 @@ const QRCode     = require('qrcode');
 const os         = require('os');
 
 const {
-  CHARACTERS, ROUTE_LENGTH, TOTAL_QUESTIONS, MINIGAME_SPOTS, FINAL_STEPS,
+  CHARACTERS, ROUTE_LENGTH, TOTAL_QUESTIONS, TOTAL_SLOTS, MINIGAME_SPOTS,
+  SHORT_MINIGAMES, LONG_MINIGAMES, FINAL_STEPS,
   createGame, createPlayer, getPlayers, getLeader, getLastPlace,
   checkAanansiHelp, updateHindrances, shuffle, publicState,
 } = require('./gameState');
@@ -172,11 +173,11 @@ function revealAnswers() {
   }, RESULT_PAUSE);
 }
 
-// Теперь milestone = по номеру вопроса, а не позиции лидера
+// Milestone по номеру вопроса
 function checkMilestone() {
-  const qi = game.questionIndex; // уже инкрементирован: после 3-го вопроса = 3
-  if (qi >= TOTAL_QUESTIONS) return 'final_race';
-  if (MINIGAME_SPOTS.includes(qi)) return 'minigame';
+  const qi = game.questionIndex;
+  if (qi >= TOTAL_QUESTIONS) return 'final_race'; // после Q11
+  if (MINIGAME_SPOTS.includes(qi))  return 'minigame';
   return null;
 }
 
