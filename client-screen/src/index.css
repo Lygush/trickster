@@ -36,3 +36,39 @@ body {
   0%, 100% { box-shadow: 0 0 10px rgba(200,168,48,0.3); }
   50%       { box-shadow: 0 0 22px rgba(200,168,48,0.7); }
 }
+
+@keyframes correctPop {
+  0%   { opacity: 0; transform: scale(0.7) translateY(-20px); }
+  70%  { transform: scale(1.04) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes deltaFloat {
+  0%   { opacity: 1; transform: translateY(0); }
+  60%  { opacity: 1; transform: translateY(-18px); }
+  100% { opacity: 0; transform: translateY(-32px); }
+}
+
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+
+@keyframes slideOutDown {
+  0%   { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(40px); }
+}
+
+@keyframes cardFlyIn {
+  from { opacity: 0; transform: translateY(60px) scale(0.75); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+/* Барабан слота — CSS-переменные задаются инлайн, все старты в одном кадре */
+@keyframes slotRoll {
+  from { transform: translateY(var(--slot-from)); }
+  to   { transform: translateY(var(--slot-to)); }
+}

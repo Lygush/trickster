@@ -2,12 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 import './index.css';
 
-import GameBackground from './components/GameBackground';
-import LobbyScreen   from './components/LobbyScreen';
-import MapPanel      from './components/MapPanel';
-import WinnerScreen  from './components/WinnerScreen';
-import MinigameIntro from './components/MinigameIntro';
-import MINIGAMES     from './minigames/index';
+import GameBackground  from './components/GameBackground';
+import LobbyScreen    from './components/LobbyScreen';
+import MapPanel       from './components/MapPanel';
+import WinnerScreen   from './components/WinnerScreen';
+import MinigameIntro  from './components/MinigameIntro';
+import QuestionReveal from './components/QuestionReveal';
+import MINIGAMES      from './minigames/index';
 import useAssets     from './hooks/useAssets';
 import useSounds     from './hooks/useSounds';
 
@@ -24,6 +25,8 @@ export default function App() {
   const [winner,      setWinner]      = useState(null);
   const [qrUrl,       setQrUrl]       = useState(null);
   const [questionNum, setQuestionNum] = useState(0);
+  // Баг 3: задержка появления QuestionReveal чтобы вопрос успел выехать
+  const [revealVisible, setRevealVisible] = useState(false);
 
   const socketRef      = useRef(null);
   const lastQuestionId = useRef(null);
@@ -88,6 +91,18 @@ export default function App() {
   const currentMinigame = gameState?.currentMinigame;
   const isQuestionPhase = phase === 'question' || phase === 'question_result';
 
+  // Задержка появления QuestionReveal чтобы вопрос успел выехать
+  // (useEffect здесь, ПОСЛЕ объявления phase — иначе TDZ в deps array)
+  useEffect(() => {
+    if (phase === 'question_result') {
+      setRevealVisible(false);
+      const t = setTimeout(() => setRevealVisible(true), 650);
+      return () => clearTimeout(t);
+    } else {
+      setRevealVisible(false);
+    }
+  }, [phase]); // eslint-disable-line
+
   return (
     <div style={s.root}>
       <GameBackground phase={phase} minigameId={currentMinigame?.id} assets={assets} />
@@ -127,11 +142,14 @@ export default function App() {
               </div>
             )}
 
-            {/* ВОПРОС */}
-            {isQuestionPhase && gameState?.currentQuestion && (
+            {/* ВОПРОС — активная фаза + слайд-аут при переходе к результату */}
+            {(phase === 'question' || (phase === 'question_result' && !revealVisible)) && gameState?.currentQuestion && (
               <>
                 <div style={s.spacer} />
-                <div style={s.bottomZone}>
+                <div style={{
+                  ...s.bottomZone,
+                  animation: phase === 'question_result' ? 'slideOutDown 0.6s ease forwards' : 'fadeIn 0.35s ease',
+                }}>
                   <TimerBar
                     questionId={gameState.currentQuestion.id}
                     paused={phase === 'question_result'}
@@ -139,10 +157,20 @@ export default function App() {
                   <QuestionCard
                     key={gameState.currentQuestion.id}
                     question={gameState.currentQuestion}
-                    revealData={phase === 'question_result' ? revealData : null}
+                    revealData={null}
                   />
                 </div>
               </>
+            )}
+
+            {/* ВОПРОС — результат: анимированный экран */}
+            {phase === 'question_result' && revealVisible && gameState?.currentQuestion && (
+              <QuestionReveal
+                key={gameState.currentQuestion.id + '_reveal'}
+                question={gameState.currentQuestion}
+                revealData={revealData}
+                players={players}
+              />
             )}
 
             {/* МИНИ-ИГРА ИНТРО */}
@@ -188,19 +216,25 @@ function Topbar({ players, answers, revealData }) {
         {sorted.map(p => {
           const isLead      = p.id === leaderId;
           const hasAnswered = answered.has(p.id);
-          let dot = null;
-          if (revealData && hasAnswered) {
-            const ok = Number(answers[p.id]?.answerIndex) === revealData.correctIndex;
-            dot = ok ? '✓' : '✗';
-          } else if (hasAnswered) {
-            dot = '·';
-          }
+          const dotColor = hasAnswered
+            ? (revealData
+                ? (Number(answers[p.id]?.answerIndex) === revealData.correctIndex ? '#6bc740' : '#e05050')
+                : '#6bc740')
+            : 'transparent';
+
           return (
             <div key={p.id} style={{
               ...tb.chip,
               borderColor: isLead ? 'rgba(212,175,55,.45)' : 'rgba(107,199,64,.18)',
               background:  isLead ? 'rgba(30,20,2,.55)'    : 'rgba(5,12,4,.5)',
             }}>
+              {/* Точка-индикатор: показывает ответил/нет и верно/нет цветом */}
+              <div style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: dotColor,
+                flexShrink: 0,
+                transition: 'background 0.3s',
+              }} />
               <div style={{ ...tb.av, borderColor: isLead ? '#d4af37' : 'rgba(107,199,64,.4)' }}>
                 {CHAR_EMOJI[p.character] || '?'}
               </div>
@@ -208,12 +242,6 @@ function Topbar({ players, answers, revealData }) {
                 {p.name.length > 7 ? p.name.slice(0,7)+'…' : p.name}
               </span>
               <span style={tb.score}>{p.score ?? 0}</span>
-              {dot && (
-                <span style={{
-                  ...tb.dot,
-                  color: dot === '✓' ? '#6bc740' : dot === '✗' ? '#e05050' : '#6bc740',
-                }}>{dot}</span>
-              )}
             </div>
           );
         })}

@@ -21,7 +21,7 @@ const QUESTIONS_RAW = require('../data/questions.json');
 // ── Конфиг ───────────────────────────────────────────────────────────────────
 const PORT             = process.env.PORT || 3001;
 const ANSWER_TIMEOUT   = 30_000;   // 30 сек на ответ
-const RESULT_PAUSE     = 7_000;    // 7 сек на просмотр результата
+const RESULT_PAUSE     = 9_000;    // 9 сек на просмотр результата
 const MINIGAME_TIMEOUT = parseInt(process.env.MINIGAME_TIMEOUT, 10) || 25_000;
 
 // ── Приложение ───────────────────────────────────────────────────────────────
@@ -582,6 +582,38 @@ io.on('connection', socket => {
   log(`Подключился: ${sid}`);
   socket.emit('game_state', publicState(game));
   socket.emit('server_info', { ip: getLocalIP(), port: PORT, characters: CHARACTERS });
+
+  // ── Переподключение (баг: смена socket.id при возврате в браузер) ─────────
+  socket.on('rejoin', ({ name, savedId }) => {
+    // Ищем по savedId, затем по имени (server restart scenario)
+    let oldPlayer = game.players[savedId]
+      || Object.values(game.players).find(p => p.name === name?.trim());
+
+    if (!oldPlayer) {
+      socket.emit('rejoin_fail', { reason: 'not_found' });
+      return;
+    }
+
+    const oldId = oldPlayer.id;
+    oldPlayer.id        = sid;
+    oldPlayer.connected = true;
+    game.players[sid]   = oldPlayer;
+    if (oldId !== sid) delete game.players[oldId];
+
+    // Переносим ответ, если игрок уже голосовал в этом раунде
+    if (game.answers[oldId] !== undefined) {
+      game.answers[sid] = game.answers[oldId];
+      if (oldId !== sid) delete game.answers[oldId];
+    }
+    if (game.finalRace?.answers?.[oldId] !== undefined) {
+      game.finalRace.answers[sid] = game.finalRace.answers[oldId];
+      if (oldId !== sid) delete game.finalRace.answers[oldId];
+    }
+
+    log(`Переподключился: ${oldPlayer.name} (${oldId} → ${sid})`);
+    socket.emit('rejoin_ok', { player: oldPlayer });
+    broadcastState();
+  });
 
   socket.on('join', ({ name }) => {
     if (game.phase !== 'lobby' && game.phase !== 'character_select') {

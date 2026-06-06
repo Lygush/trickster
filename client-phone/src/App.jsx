@@ -31,11 +31,46 @@ export default function App() {
   const socketRef = useRef(null);
   const myIdRef   = useRef(null);
 
+  // ── Сессия в sessionStorage: переживает закрытие/обновление вкладки ───────
+  const SESSION_KEY = 'trickster_session';
+
+  const saveSession = (name, id) => {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify({ name, id })); } catch (_) {}
+  };
+  const loadSession = () => {
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); } catch (_) { return null; }
+  };
+  const clearSession = () => {
+    try { sessionStorage.removeItem(SESSION_KEY); } catch (_) {}
+  };
+
   useEffect(() => {
-    const socket = io(SERVER_URL);
+    const socket = io(SERVER_URL, { reconnection: true, reconnectionDelay: 500 });
     socketRef.current = socket;
 
-    socket.on('connect', () => { myIdRef.current = socket.id; });
+    socket.on('connect', () => {
+      myIdRef.current = socket.id;
+
+      // Пробуем восстановить сессию
+      const session = loadSession();
+      if (session?.name) {
+        socket.emit('rejoin', { name: session.name, savedId: session.id });
+      }
+    });
+
+    socket.on('rejoin_ok', ({ player }) => {
+      myIdRef.current = socket.id;
+      saveSession(player.name, socket.id);
+      setPlayerName(player.name);
+      setJoined(true);
+    });
+
+    // Не смогли переподключиться — сервер нас не знает (перезапуск?)
+    socket.on('rejoin_fail', () => {
+      clearSession();
+      setJoined(false);
+      setPlayerName('');
+    });
 
     socket.on('game_state', (state) => {
       setGameState(state);
@@ -66,6 +101,9 @@ export default function App() {
   const handleJoin = (name) => {
     setPlayerName(name);
     socketRef.current?.emit('join', { name });
+    // Сессия сохраняется после подтверждения от сервера через game_state,
+    // но запишем имя сразу чтобы не потерять при мгновенном reconnect
+    saveSession(name, myIdRef.current || '');
     setJoined(true);
   };
 
@@ -101,6 +139,20 @@ export default function App() {
   const currentMinigame = gameState?.currentMinigame;
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // Если сервер перезапустился: rejoin_fail уже сбрасывает сессию.
+  // Дополнительная защита: если joined=true, но нас нет в players ПОСЛЕ
+  // того как список обновился — значит сессия потеряна (без race condition).
+  useEffect(() => {
+    if (!joined || !gameState) return;
+    const inLobby = gameState.phase === 'lobby' || gameState.phase === 'character_select';
+    const found   = gameState.players?.some(p => p.id === myIdRef.current);
+    if (inLobby && !found) {
+      clearSession();
+      setJoined(false);
+      setPlayerName('');
+    }
+  }, [gameState?.players?.length, gameState?.phase]); // eslint-disable-line
 
   if (!joined) {
     return <PhoneShell><JoinScreen onJoin={handleJoin} error={error} /></PhoneShell>;
