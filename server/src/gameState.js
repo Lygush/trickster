@@ -32,10 +32,6 @@ function createGame() {
     questionIndex: 0,   // сколько вопросов уже задано (1-based после increment)
     currentQuestion: null,
     answers: {},
-    answerTimer: null,
-    roundLocked: false,
-    activeTimers: [],
-    minigameQueue: [],
     currentMinigame: null,
     finalRace: null,
     hindranceOverride: {},
@@ -176,8 +172,6 @@ function publicState(game) {
 }
 
 function resetGameState(game) {
-  game.activeTimers.forEach(id => clearTimeout(id));
-  game.activeTimers = [];
   const fresh = createGame();
   Object.assign(game, fresh, { players: game.players });
   Object.values(game.players).forEach(p => {

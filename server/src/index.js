@@ -141,10 +141,10 @@ function revealAnswers() {
       if (checkAanansiHelp(game, p.id)) {
         game.aanansiHelpsCount[p.id] = (game.aanansiHelpsCount[p.id] || 0) + 1;
         p.score = (p.score || 0) + 1;
-        game.aanansiHelpActive[p.id] = false;
         log(`Ананси помогает ${p.name} (${game.aanansiHelpsCount[p.id]})`);
       }
     } else if (Number(ans.answerIndex) !== correct) {
+      // Неверный ответ — Ананси больше не помогает этому игроку
       game.aanansiHelpActive[p.id] = false;
     }
   });
@@ -616,7 +616,7 @@ io.on('connection', socket => {
   });
 
   socket.on('join', ({ name }) => {
-    if (game.phase !== 'lobby' && game.phase !== 'character_select') {
+    if (game.phase !== 'lobby') {
       socket.emit('error', { message: 'Игра уже идёт' }); return;
     }
     if (!name?.trim()) { socket.emit('error', { message: 'Нужно имя' }); return; }
@@ -640,7 +640,7 @@ io.on('connection', socket => {
 
   // Баг #2: защита от двойного старта
   socket.on('start_game', () => {
-    if (game.phase !== 'lobby' && game.phase !== 'character_select') {
+    if (game.phase !== 'lobby') {
       socket.emit('error', { message: 'Игра уже началась' });
       return;
     }

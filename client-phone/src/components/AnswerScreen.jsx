@@ -9,36 +9,41 @@ const HINDRANCE = {
   3: { text: '⚡ Ананси злится!',  sub: 'Варианты перемешаны',             color: '#c84830' },
 };
 
+// Возвращает { display: string[], originalIdx: number[] }
+// originalIdx[i] — оригинальный индекс ответа на визуальной позиции i
 function applyHindrance(answers, level) {
-  const r = [...answers];
+  const originalIdx = [0, 1, 2, 3];
   if (level === 2) {
     const i = Math.floor(Math.random() * 4);
     const j = (i + 1 + Math.floor(Math.random() * 3)) % 4;
-    [r[i], r[j]] = [r[j], r[i]];
-  } else if (level === 3) {
-    for (let i = r.length - 1; i > 0; i--) {
+    [originalIdx[i], originalIdx[j]] = [originalIdx[j], originalIdx[i]];
+  } else if (level >= 3) {
+    for (let i = originalIdx.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [r[i], r[j]] = [r[j], r[i]];
+      [originalIdx[i], originalIdx[j]] = [originalIdx[j], originalIdx[i]];
     }
   }
-  return r;
+  return { display: originalIdx.map(i => answers[i]), originalIdx };
 }
 
-export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAnswer, aanansiHelp, me }) {
+export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAnswer, me }) {
   const [timeLeft,      setTimeLeft]      = useState(ANSWER_TIMEOUT);
   const [displayAnswers, setDisplayAnswers] = useState([]);
+  const [originalIdx,   setOriginalIdx]   = useState([0, 1, 2, 3]);
   const [shaking,       setShaking]       = useState(false);
 
   useEffect(() => {
     if (!question) return;
     setTimeLeft(ANSWER_TIMEOUT);
-    setDisplayAnswers(applyHindrance(question.answers, hindranceLevel));
+    const { display, originalIdx: idx } = applyHindrance(question.answers, hindranceLevel);
+    setDisplayAnswers(display);
+    setOriginalIdx(idx);
     if (hindranceLevel >= 2) {
       setShaking(true);
       const t = setTimeout(() => setShaking(false), 700);
       return () => clearTimeout(t);
     }
-  }, [question?.id]);
+  }, [question?.id]); // eslint-disable-line
 
   useEffect(() => {
     if (myAnswer !== null) return;
@@ -117,7 +122,7 @@ export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAns
                 ...(hasAnswered && !isChosen ? s.btnDim    : {}),
                 ...(isChosen               ? s.btnChosen  : {}),
               }}
-              onClick={() => !hasAnswered && timeLeft > 0 && onAnswer(i)}
+              onClick={() => !hasAnswered && timeLeft > 0 && onAnswer(originalIdx[i])}
               disabled={hasAnswered || timeLeft === 0}
             >
               <div style={{ ...s.key, ...(isChosen ? s.keyChosen : {}) }}>

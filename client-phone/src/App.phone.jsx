@@ -25,7 +25,6 @@ export default function App() {
   const [gameState,   setGameState]   = useState(null);
   const [revealData,  setRevealData]  = useState(null);
   const [myAnswer,    setMyAnswer]    = useState(null);
-  const [aanansiHelp, setAanansiHelp] = useState(false);
   const [winner,      setWinner]      = useState(null);
 
   const socketRef = useRef(null);
@@ -145,7 +144,7 @@ export default function App() {
   // того как список обновился — значит сессия потеряна (без race condition).
   useEffect(() => {
     if (!joined || !gameState) return;
-    const inLobby = gameState.phase === 'lobby' || gameState.phase === 'character_select';
+    const inLobby = gameState.phase === 'lobby';
     const found   = gameState.players?.some(p => p.id === myIdRef.current);
     if (inLobby && !found) {
       clearSession();
@@ -158,7 +157,7 @@ export default function App() {
     return <PhoneShell><JoinScreen onJoin={handleJoin} error={error} /></PhoneShell>;
   }
 
-  if (phase === 'lobby' || phase === 'character_select') {
+  if (phase === 'lobby') {
     return (
       <PhoneShell>
         <CharSelect
@@ -181,7 +180,7 @@ export default function App() {
           hindranceLevel={hindranceLevel}
           onAnswer={handleAnswer}
           myAnswer={myAnswer}
-          aanansiHelp={aanansiHelp}
+          me={me}
         />
       </PhoneShell>
     );
@@ -269,7 +268,7 @@ export default function App() {
               : 'В следующий раз повезёт!'}
           </div>
           <div style={winnerStyles.pos}>
-            Твой счёт: {me?.score ?? 0} / 15
+            Твой счёт: {me?.score ?? 0} / 11
           </div>
         </div>
       </PhoneShell>

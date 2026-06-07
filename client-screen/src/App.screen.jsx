@@ -29,6 +29,7 @@ export default function App() {
   const [revealVisible, setRevealVisible] = useState(false);
 
   const socketRef      = useRef(null);
+  const prevPlayersLen = useRef(0);
   const lastQuestionId = useRef(null);
   const assets = useAssets();
   const sounds = useSounds(assets);
@@ -41,6 +42,11 @@ export default function App() {
 
     socket.on('game_state', (state) => {
       setGameState(state);
+      if (state.phase === 'lobby') {
+        const newLen = state.players?.length || 0;
+        if (newLen > prevPlayersLen.current) sounds.playSfx?.('join');
+        prevPlayersLen.current = newLen;
+      }
       if (state.phase === 'question') {
         setRevealData(null);
         setAnswers({});
@@ -52,7 +58,7 @@ export default function App() {
         }
       }
       const musicMap = {
-        lobby: 'lobby', character_select: 'lobby', intro: 'lobby',
+        lobby: 'lobby', intro: 'lobby',
         question: 'question', question_result: 'question',
         minigame_intro: 'minigame', minigame: 'minigame',
         final_race_intro: 'final_race', final_race: 'final_race',
@@ -122,6 +128,7 @@ export default function App() {
             <MapPanel
               players={players}
               questionIndex={gameState?.questionIndex || 0}
+              phase={phase}
             />
           )}
 
@@ -129,7 +136,7 @@ export default function App() {
           <div style={s.right}>
 
             {/* LOBBY */}
-            {(phase === 'lobby' || phase === 'character_select') && (
+            {(phase === 'lobby') && (
               <LobbyScreen players={players} qrUrl={qrUrl} serverInfo={serverInfo} onStart={handleStart} assets={assets} />
             )}
 
