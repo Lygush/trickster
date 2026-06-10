@@ -128,6 +128,27 @@ export default function App() {
   const myId    = myIdRef.current;
   const me      = players.find(p => p.id === myId);
 
+  // Плавный переход между фазами: exit 220ms, затем enter новой
+  const [displayPhase, setDisplayPhase] = useState('lobby');
+  const [phaseExiting, setPhaseExiting] = useState(false);
+  const phaseTimerRef = useRef(null);
+  const prevPhaseRef  = useRef(phase);
+
+  useEffect(() => {
+    if (phase === prevPhaseRef.current) return;
+    prevPhaseRef.current = phase;
+    setPhaseExiting(true);
+    clearTimeout(phaseTimerRef.current);
+    phaseTimerRef.current = setTimeout(() => {
+      setDisplayPhase(phase);
+      setPhaseExiting(false);
+    }, 220);
+    return () => clearTimeout(phaseTimerRef.current);
+  }, [phase]); // eslint-disable-line
+
+  // Инициализация displayPhase
+  useEffect(() => { setDisplayPhase(phase); }, []); // eslint-disable-line
+
   const takenChars     = players.filter(p => p.id !== myId && p.character).map(p => p.character);
   const hindranceLevel = me?.hindranceLevel || 0;
 
@@ -157,9 +178,11 @@ export default function App() {
     return <PhoneShell><JoinScreen onJoin={handleJoin} error={error} /></PhoneShell>;
   }
 
-  if (phase === 'lobby') {
-    return (
-      <PhoneShell>
+  // ── Единый рендер с анимацией перехода ───────────────────────────────────
+
+  const renderContent = (p) => {
+    if (p === 'lobby') return (
+      <>
         <CharSelect
           takenChars={takenChars}
           myChar={me?.character || null}
@@ -167,94 +190,64 @@ export default function App() {
           playerName={playerName}
         />
         {error && <div style={errorStyle}>{error}</div>}
-      </PhoneShell>
+      </>
     );
-  }
 
-  if (phase === 'question') {
-    return (
-      <PhoneShell>
-        <AnswerScreen
-          key={gameState?.currentQuestion?.id}
-          question={gameState?.currentQuestion}
-          hindranceLevel={hindranceLevel}
-          onAnswer={handleAnswer}
-          myAnswer={myAnswer}
+    if (p === 'question') return (
+      <AnswerScreen
+        key={gameState?.currentQuestion?.id}
+        question={gameState?.currentQuestion}
+        hindranceLevel={hindranceLevel}
+        onAnswer={handleAnswer}
+        myAnswer={myAnswer}
+        me={me}
+      />
+    );
+
+    if (p === 'question_result') return (
+      <ResultScreen
+        question={gameState?.currentQuestion}
+        revealData={revealData}
+        myAnswer={myAnswer}
+        myScore={me?.score ?? 0}
+      />
+    );
+
+    if (p === 'minigame_intro') return (
+      <MinigameIntro minigame={currentMinigame} player={me} />
+    );
+
+    if (p === 'minigame') {
+      const def       = MINIGAMES[currentMinigame?.id];
+      const PhoneView = def?.PhoneView ?? null;
+      return PhoneView ? (
+        <PhoneView
+          key={currentMinigame.id}
+          minigame={currentMinigame}
+          myId={myId}
           me={me}
-        />
-      </PhoneShell>
-    );
-  }
-
-  if (phase === 'question_result') {
-    return (
-      <PhoneShell>
-        <ResultScreen
-          question={gameState?.currentQuestion}
-          revealData={revealData}
-          myAnswer={myAnswer}
-          myScore={me?.score ?? 0}
-        />
-      </PhoneShell>
-    );
-  }
-
-  // ── Мини-игры ─────────────────────────────────────────────────────────────
-  //
-  // Всё что нужно знать App.jsx — есть ли PhoneView в реестре.
-  // Добавляя новую мини-игру, этот блок не трогаем.
-
-  if (phase === 'minigame_intro') {
-    return (
-      <PhoneShell>
-        <MinigameIntro minigame={currentMinigame} player={me} />
-      </PhoneShell>
-    );
-  }
-
-  if (phase === 'minigame') {
-    const def       = MINIGAMES[currentMinigame?.id];
-    const PhoneView = def?.PhoneView ?? null;
-
-    return (
-      <PhoneShell>
-        {PhoneView ? (
-          <PhoneView
-            key={currentMinigame.id}
-            minigame={currentMinigame}
-            myId={myId}
-            me={me}
-            players={players}
-            onEmit={handleMinigameEmit}
-          />
-        ) : (
-          <WaitScreen phase={phase} player={me} players={players} />
-        )}
-      </PhoneShell>
-    );
-  }
-
-  // ── Финальная гонка ───────────────────────────────────────────────────────
-
-  if (phase === 'final_race' || phase === 'final_race_intro') {
-    return (
-      <PhoneShell>
-        <FinalRaceScreen
-          question={finalQuestion}
-          myPosition={myFinalPos}
-          onAnswer={handleAnswer}
-          myAnswer={myAnswer}
           players={players}
-          finalPositions={finalPositions}
+          onEmit={handleMinigameEmit}
         />
-      </PhoneShell>
-    );
-  }
+      ) : (
+        <WaitScreen phase={p} player={me} players={players} />
+      );
+    }
 
-  if (phase === 'winner') {
-    const isWinner = winner?.id === myId;
-    return (
-      <PhoneShell>
+    if (p === 'final_race' || p === 'final_race_intro') return (
+      <FinalRaceScreen
+        question={finalQuestion}
+        myPosition={myFinalPos}
+        onAnswer={handleAnswer}
+        myAnswer={myAnswer}
+        players={players}
+        finalPositions={finalPositions}
+      />
+    );
+
+    if (p === 'winner') {
+      const isWinner = winner?.id === myId;
+      return (
         <div style={winnerStyles.wrap}>
           <div style={{ fontSize: 80 }}>
             {isWinner ? '🏆' : CHAR_EMOJI[me?.character] || '🕷️'}
@@ -271,11 +264,25 @@ export default function App() {
             Твой счёт: {me?.score ?? 0} / 11
           </div>
         </div>
-      </PhoneShell>
-    );
-  }
+      );
+    }
 
-  return <PhoneShell><WaitScreen phase={phase} player={me} players={players} /></PhoneShell>;
+    return <WaitScreen phase={p} player={me} players={players} />;
+  };
+
+  return (
+    <PhoneShell>
+      <div
+        key={displayPhase}
+        style={{
+          height: '100%',
+          ...(phaseExiting ? { animation: 'fadeOut 0.22s ease forwards' } : {}),
+        }}
+      >
+        {renderContent(displayPhase)}
+      </div>
+    </PhoneShell>
+  );
 }
 
 // ── Shell ──────────────────────────────────────────────────────────────────

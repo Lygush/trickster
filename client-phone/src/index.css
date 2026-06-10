@@ -56,12 +56,6 @@ body {
   80%       { transform: translateX(6px); }
 }
 
-@keyframes flip {
-  0%   { transform: rotateX(0deg); }
-  50%  { transform: rotateX(90deg); }
-  100% { transform: rotateX(180deg); }
-}
-
 @keyframes slideUp {
   from { transform: translateY(30px); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
@@ -71,4 +65,50 @@ body {
   0%   { transform: scale(0.5); opacity: 0; }
   70%  { transform: scale(1.1); }
   100% { transform: scale(1);   opacity: 1; }
+}
+
+/* Вариант ответа появляется с лёгким подъёмом */
+@keyframes answerAppear {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Нажатие кнопки — быстрое сжатие */
+@keyframes btnPress {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+
+/* Вспышка на правильном ответе */
+@keyframes correctFlash {
+  0%   { box-shadow: 0 0 0px rgba(107,199,64,0); }
+  40%  { box-shadow: 0 0 28px rgba(107,199,64,.7), inset 0 0 20px rgba(107,199,64,.15); }
+  100% { box-shadow: 0 0 16px rgba(107,199,64,.22), inset 0 0 0px transparent; }
+}
+
+/* Вспышка на неверном ответе */
+@keyframes wrongFlash {
+  0%   { box-shadow: 0 0 0px rgba(200,72,48,0); }
+  40%  { box-shadow: 0 0 24px rgba(200,72,48,.6), inset 0 0 16px rgba(200,72,48,.12); }
+  100% { box-shadow: 0 0 10px rgba(200,72,48,.15); }
+}
+
+/* Пульс таймера при danger */
+@keyframes timerDangerPhone {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%       { transform: scale(1.12); opacity: 0.8; }
+}
+
+/* Паутина в JoinScreen/CharSelect — рисуется stroke */
+@keyframes webDraw {
+  from { stroke-dashoffset: 600; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Появление значка результата */
+@keyframes resultIconPop {
+  0%   { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+  65%  { transform: scale(1.18) rotate(4deg); }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }

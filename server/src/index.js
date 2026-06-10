@@ -45,6 +45,17 @@ app.get('/phone/*', (req, res) =>
 
 app.get('/', (req, res) => res.redirect('/screen'));
 
+// favicon.ico — берём из build экранного клиента
+app.get('/favicon.ico', (req, res) => {
+  const ico = path.join(SCREEN_BUILD, 'favicon.ico');
+  const fs2 = require('fs');
+  if (fs2.existsSync(ico)) {
+    res.set('Content-Type', 'image/x-icon').sendFile(ico);
+  } else {
+    res.status(204).end();
+  }
+});
+
 // ── Статика ассетов ──────────────────────────────────────────────────────────
 const fs = require('fs');
 if (!fs.existsSync(ASSETS_DIR)) fs.mkdirSync(ASSETS_DIR, { recursive: true });

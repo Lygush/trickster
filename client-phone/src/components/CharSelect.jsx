@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 const CHARACTERS = [
   { id: 'spider', emoji: '🕷️', name: 'Паук',    desc: 'Ловкий и терпеливый' },
@@ -9,15 +9,26 @@ const CHARACTERS = [
 ];
 
 export default function CharSelect({ takenChars, myChar, onSelect, playerName }) {
+  const [pressed, setPressed] = useState(null);
+
+  const handlePress = (id, taken) => {
+    if (taken) return;
+    setPressed(id);
+    setTimeout(() => setPressed(null), 180);
+    onSelect(id);
+  };
+
   return (
     <div style={s.wrap}>
       <div style={s.greeting}>Привет, {playerName}!</div>
       <div style={s.title}>Выбери персонажа</div>
 
       <div style={s.grid}>
-        {CHARACTERS.map(c => {
-          const taken   = takenChars.includes(c.id) && c.id !== myChar;
+        {CHARACTERS.map((c, idx) => {
+          const taken    = takenChars.includes(c.id) && c.id !== myChar;
           const selected = c.id === myChar;
+          const isPress  = pressed === c.id;
+
           return (
             <button
               key={c.id}
@@ -25,17 +36,17 @@ export default function CharSelect({ takenChars, myChar, onSelect, playerName })
                 ...s.card,
                 ...(selected ? s.cardSelected : {}),
                 ...(taken    ? s.cardTaken    : {}),
+                transform: isPress ? 'scale(0.93)' : selected ? 'scale(1.03)' : 'scale(1)',
+                animation: taken ? 'none' : `answerAppear 0.35s cubic-bezier(0.22,0.61,0.36,1) ${idx * 60}ms both`,
               }}
-              onClick={() => !taken && onSelect(c.id)}
+              onClick={() => handlePress(c.id, taken)}
               disabled={taken}
             >
               <div style={s.emoji}>{c.emoji}</div>
               <div style={{ ...s.name, ...(selected ? s.nameSelected : {}) }}>
                 {c.name}
               </div>
-              <div style={s.desc}>
-                {taken ? 'Занят' : c.desc}
-              </div>
+              <div style={s.desc}>{c.desc}</div>
               {selected && <div style={s.checkmark}>✓</div>}
             </button>
           );
@@ -43,9 +54,7 @@ export default function CharSelect({ takenChars, myChar, onSelect, playerName })
       </div>
 
       {myChar && (
-        <div style={s.ready}>
-          Готово! Ждём начала игры...
-        </div>
+        <div style={s.ready}>Готово! Ждём начала игры...</div>
       )}
     </div>
   );
@@ -59,16 +68,13 @@ const s = {
     gap: 16, overflowY: 'auto',
     animation: 'fadeIn 0.4s ease',
   },
-  greeting: {
-    fontSize: 13, color: '#5a9a30', letterSpacing: 1,
-  },
+  greeting: { fontSize: 13, color: '#5a9a30', letterSpacing: 1 },
   title: {
     fontFamily: "'Cinzel', serif",
     fontSize: 20, color: '#f0d060', letterSpacing: 1,
   },
   grid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    display: 'grid', gridTemplateColumns: '1fr 1fr',
     gap: 12, width: '100%', maxWidth: 360,
   },
   card: {
@@ -78,29 +84,23 @@ const s = {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', gap: 6,
     cursor: 'pointer', position: 'relative',
-    transition: 'border-color .2s, background .2s, transform .15s',
+    transition: 'border-color .2s, background .2s, transform .15s, box-shadow .2s, opacity .2s',
     color: 'inherit',
+    WebkitTapHighlightColor: 'transparent',
   },
   cardSelected: {
     borderColor: '#c8a830',
     background: 'rgba(30,40,10,0.95)',
     boxShadow: '0 0 20px rgba(200,168,48,0.25)',
-    transform: 'scale(1.03)',
   },
   cardTaken: {
     opacity: 0.35,
     cursor: 'not-allowed',
   },
   emoji: { fontSize: 40 },
-  name: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 13, color: '#d8f0b0',
-  },
+  name: { fontFamily: "'Cinzel', serif", fontSize: 13, color: '#d8f0b0' },
   nameSelected: { color: '#f0d060' },
-  desc: {
-    fontSize: 10, color: '#3a6028',
-    textAlign: 'center', lineHeight: 1.3,
-  },
+  desc: { fontSize: 10, color: '#3a6028', textAlign: 'center', lineHeight: 1.3 },
   checkmark: {
     position: 'absolute', top: 8, right: 10,
     fontSize: 14, color: '#c8a830', fontWeight: 700,
@@ -108,7 +108,6 @@ const s = {
   ready: {
     fontSize: 12, color: '#5a9a30',
     letterSpacing: 1, textTransform: 'uppercase',
-    animation: 'pulse 1.5s infinite',
-    marginTop: 4,
+    animation: 'pulse 1.5s infinite', marginTop: 4,
   },
 };

@@ -1,16 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const LETTERS        = ['А', 'Б', 'В', 'Г'];
 const ANSWER_TIMEOUT = 30;
 
 const HINDRANCE = {
-  1: { text: '⚡ Ананси путает!',  sub: 'Один из ответов — ловушка',      color: '#c8a830' },
-  2: { text: '⚡ Ананси мешает!',  sub: 'Два ответа перепутаны местами',   color: '#c87830' },
-  3: { text: '⚡ Ананси злится!',  sub: 'Варианты перемешаны',             color: '#c84830' },
+  1: { text: '⚡ Ананси путает!',  sub: 'Один из ответов — ловушка',    color: '#c8a830' },
+  2: { text: '⚡ Ананси мешает!',  sub: 'Два ответа перепутаны местами', color: '#c87830' },
+  3: { text: '⚡ Ананси злится!',  sub: 'Варианты перемешаны',           color: '#c84830' },
 };
 
-// Возвращает { display: string[], originalIdx: number[] }
-// originalIdx[i] — оригинальный индекс ответа на визуальной позиции i
 function applyHindrance(answers, level) {
   const originalIdx = [0, 1, 2, 3];
   if (level === 2) {
@@ -26,15 +24,23 @@ function applyHindrance(answers, level) {
   return { display: originalIdx.map(i => answers[i]), originalIdx };
 }
 
+const CHAR_EMOJI = {
+  spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎',
+};
+
 export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAnswer, me }) {
-  const [timeLeft,      setTimeLeft]      = useState(ANSWER_TIMEOUT);
+  const [timeLeft,       setTimeLeft]       = useState(ANSWER_TIMEOUT);
   const [displayAnswers, setDisplayAnswers] = useState([]);
-  const [originalIdx,   setOriginalIdx]   = useState([0, 1, 2, 3]);
-  const [shaking,       setShaking]       = useState(false);
+  const [originalIdx,    setOriginalIdx]    = useState([0, 1, 2, 3]);
+  const [shaking,        setShaking]        = useState(false);
+  // flashIdx: индекс нажатой кнопки для анимации вспышки
+  const [flashIdx,       setFlashIdx]       = useState(null);
+  const intervalRef = useRef(null);
 
   useEffect(() => {
     if (!question) return;
     setTimeLeft(ANSWER_TIMEOUT);
+    setFlashIdx(null);
     const { display, originalIdx: idx } = applyHindrance(question.answers, hindranceLevel);
     setDisplayAnswers(display);
     setOriginalIdx(idx);
@@ -46,27 +52,39 @@ export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAns
   }, [question?.id]); // eslint-disable-line
 
   useEffect(() => {
-    if (myAnswer !== null) return;
-    const iv = setInterval(() => {
-      setTimeLeft(t => { if (t <= 1) { clearInterval(iv); return 0; } return t - 1; });
+    if (myAnswer !== null) {
+      clearInterval(intervalRef.current);
+      return;
+    }
+    intervalRef.current = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) { clearInterval(intervalRef.current); return 0; }
+        return t - 1;
+      });
     }, 1000);
-    return () => clearInterval(iv);
-  }, [question?.id, myAnswer]);
+    return () => clearInterval(intervalRef.current);
+  }, [question?.id, myAnswer]); // eslint-disable-line
 
   if (!question) return null;
 
-  const pct        = (timeLeft / ANSWER_TIMEOUT) * 100;
-  const isDanger   = timeLeft <= 6;
-  const isWarning  = timeLeft <= 12 && !isDanger;
-  const barColor   = isDanger ? '#c03030' : isWarning ? '#c08020' : '#6bc740';
-  const barGrad    = isDanger
+  const pct       = (timeLeft / ANSWER_TIMEOUT) * 100;
+  const isDanger  = timeLeft <= 6;
+  const isWarning = timeLeft <= 12 && !isDanger;
+  const barGrad   = isDanger
     ? 'linear-gradient(90deg,#c03030,#f06060)'
-    : isWarning ? 'linear-gradient(90deg,#c08020,#f0c060)'
-    : 'linear-gradient(90deg,#6bc740,#c6f060)';
-  const numColor   = isDanger ? '#f06060' : isWarning ? '#f0a040' : '#c6f060';
+    : isWarning
+      ? 'linear-gradient(90deg,#c08020,#f0c060)'
+      : 'linear-gradient(90deg,#6bc740,#c6f060)';
+  const numColor  = isDanger ? '#f06060' : isWarning ? '#f0a040' : '#c6f060';
 
   const hasAnswered = myAnswer !== null;
   const hindrance   = HINDRANCE[hindranceLevel];
+
+  const handlePress = (visualIdx) => {
+    if (hasAnswered || timeLeft === 0) return;
+    setFlashIdx(visualIdx);
+    onAnswer(originalIdx[visualIdx]);
+  };
 
   return (
     <div style={s.wrap}>
@@ -83,16 +101,9 @@ export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAns
         </div>
       )}
 
-      {/* ── Шапка: аватар + имя + очки ── */}
+      {/* ── Шапка ── */}
       <div style={s.header}>
-        <div style={s.av}>
-          {me?.character === 'spider'  ? '🕷️'
-         : me?.character === 'frog'   ? '🐸'
-         : me?.character === 'snake'  ? '🐍'
-         : me?.character === 'beetle' ? '🪲'
-         : me?.character === 'lizard' ? '🦎'
-         : '?'}
-        </div>
+        <div style={s.av}>{CHAR_EMOJI[me?.character] || '?'}</div>
         <div style={s.info}>
           <div style={s.name}>{me?.name || '—'}</div>
           <div style={s.pts}>{me?.score ?? 0} очков</div>
@@ -100,11 +111,21 @@ export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAns
       </div>
 
       {/* ── Таймер ── */}
-      <div style={s.timerWrap}>
+      <div style={{
+        ...s.timerWrap,
+        animation: isDanger ? 'timerDangerPhone 0.5s ease-in-out infinite' : 'none',
+      }}>
         <div style={s.timerBar}>
           <div style={{ ...s.timerFill, width: `${pct}%`, background: barGrad }}/>
         </div>
-        <div style={{ ...s.timerNum, color: numColor }}>{timeLeft}</div>
+        <div style={{
+          ...s.timerNum,
+          color: numColor,
+          fontSize: isDanger ? 20 : isWarning ? 17 : 15,
+          transition: 'color .4s, font-size .3s',
+        }}>
+          {timeLeft}
+        </div>
       </div>
 
       {/* ── Вопрос ── */}
@@ -113,16 +134,23 @@ export default function AnswerScreen({ question, hindranceLevel, onAnswer, myAns
       {/* ── Ответы 2×2 ── */}
       <div style={{ ...s.grid, animation: shaking ? 'shake 0.6s ease' : 'none' }}>
         {displayAnswers.map((ans, i) => {
-          const isChosen = hasAnswered && myAnswer === i;
+          const isChosen  = hasAnswered && myAnswer === originalIdx[i];
+          const isFlashed = flashIdx === i;
+          const isDimmed  = hasAnswered && !isChosen;
+
           return (
             <button
               key={i}
               style={{
                 ...s.btn,
-                ...(hasAnswered && !isChosen ? s.btnDim    : {}),
-                ...(isChosen               ? s.btnChosen  : {}),
+                ...(isDimmed  ? s.btnDim    : {}),
+                ...(isChosen  ? s.btnChosen : {}),
+                // Stagger на появление при смене вопроса
+                animation: isFlashed
+                  ? 'btnPress 0.18s ease'
+                  : `answerAppear 0.32s cubic-bezier(0.22,0.61,0.36,1) ${i * 70}ms both`,
               }}
-              onClick={() => !hasAnswered && timeLeft > 0 && onAnswer(originalIdx[i])}
+              onClick={() => handlePress(i)}
               disabled={hasAnswered || timeLeft === 0}
             >
               <div style={{ ...s.key, ...(isChosen ? s.keyChosen : {}) }}>
@@ -153,8 +181,6 @@ const s = {
     gap: 10, overflowY: 'auto',
     animation: 'fadeIn 0.3s ease',
   },
-
-  // Помеха
   banner: {
     background: 'rgba(20,10,4,.92)',
     border: '1px solid',
@@ -162,13 +188,8 @@ const s = {
     display: 'flex', flexDirection: 'column', gap: 2,
     flexShrink: 0,
   },
-  bannerText: {
-    fontFamily: "'Cinzel',serif",
-    fontSize: 12, letterSpacing: .3,
-  },
-  bannerSub: { fontSize: 10, color: '#a07840' },
-
-  // Шапка
+  bannerText: { fontFamily: "'Cinzel',serif", fontSize: 12, letterSpacing: .3 },
+  bannerSub:  { fontSize: 10, color: '#a07840' },
   header: {
     display: 'flex', alignItems: 'center', gap: 10,
     flexShrink: 0,
@@ -183,29 +204,25 @@ const s = {
   info: { display: 'flex', flexDirection: 'column', gap: 1 },
   name: { fontFamily: "'Cinzel',serif", fontSize: 13, color: '#9de05a' },
   pts:  { fontSize: 10, color: 'rgba(150,220,90,.45)' },
-
-  // Таймер
   timerWrap: {
     display: 'flex', alignItems: 'center', gap: 8,
     flexShrink: 0,
   },
   timerBar: {
-    flex: 1, height: 4,
+    flex: 1, height: 5,
     background: 'rgba(255,255,255,.08)',
-    borderRadius: 2, overflow: 'hidden',
+    borderRadius: 3, overflow: 'hidden',
   },
   timerFill: {
-    height: '100%', borderRadius: 2,
+    height: '100%', borderRadius: 3,
     transition: 'width 1s linear, background .5s',
   },
   timerNum: {
     fontFamily: "'Cinzel',serif",
-    fontSize: 15, fontWeight: 700,
-    minWidth: 22, textAlign: 'right',
-    transition: 'color .4s', flexShrink: 0,
+    fontWeight: 700,
+    minWidth: 26, textAlign: 'right',
+    flexShrink: 0,
   },
-
-  // Вопрос
   question: {
     fontFamily: "'Cinzel',serif",
     fontSize: 'clamp(14px,4vw,19px)',
@@ -216,13 +233,10 @@ const s = {
     borderBottom: '1px solid rgba(107,199,64,.1)',
     flexShrink: 0,
   },
-
-  // Сетка ответов 2×2
   grid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: 8,
-    flex: 1, minHeight: 0,
+    gap: 8, flex: 1, minHeight: 0,
   },
   btn: {
     display: 'flex', flexDirection: 'column',
@@ -233,16 +247,16 @@ const s = {
     borderRadius: 14,
     padding: '10px 6px',
     cursor: 'pointer',
-    transition: 'border-color .2s, background .2s, transform .1s',
     WebkitTapHighlightColor: 'transparent',
     minHeight: 0,
+    // transition только для не-анимированных свойств
+    transition: 'border-color .2s, background .2s, opacity .2s',
   },
-  btnDim:    { opacity: 0.35, cursor: 'default' },
+  btnDim:    { opacity: 0.3, cursor: 'default' },
   btnChosen: {
     borderColor: '#c8a830',
     background: 'rgba(30,22,2,.95)',
-    boxShadow: '0 0 16px rgba(200,168,48,.22)',
-    transform: 'scale(1.02)',
+    boxShadow: '0 0 18px rgba(200,168,48,.25)',
   },
   key: {
     fontFamily: "'Cinzel',serif",
@@ -256,8 +270,6 @@ const s = {
     color: 'rgba(180,220,140,.75)',
     textAlign: 'center', lineHeight: 1.25,
   },
-
-  // Статус
   status: {
     textAlign: 'center',
     fontSize: 11, color: '#5a9a30',

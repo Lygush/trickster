@@ -5,17 +5,19 @@ const CHAR_EMOJI = {
 };
 
 export default function WaitScreen({ phase, player, players }) {
-  const leader = [...(players || [])].sort((a, b) => b.position - a.position)[0];
-  const myPos  = player?.position || 0;
+  const leader = [...(players || [])].sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0];
+  const myScore = player?.score ?? 0;
 
   const getMessage = () => {
-    if (phase === 'intro')           return 'Ананси готовит первый вопрос...';
-    if (phase === 'question_result') return 'Смотри на экран!';
-    if (phase === 'minigame_intro')  return 'Ананси затевает что-то...';
-    if (phase === 'minigame')        return 'Мини-игра!';
+    if (phase === 'intro')            return 'Ананси готовит первый вопрос...';
+    if (phase === 'question_result')  return 'Смотри на экран!';
+    if (phase === 'minigame_intro')   return 'Ананси затевает что-то...';
+    if (phase === 'minigame')         return 'Мини-игра!';
     if (phase === 'final_race_intro') return 'Финальная гонка начинается!';
     return 'Ждём...';
   };
+
+  const isLeader = leader?.id === player?.id;
 
   return (
     <div style={s.wrap}>
@@ -25,16 +27,25 @@ export default function WaitScreen({ phase, player, players }) {
       <div style={s.name}>{player?.name}</div>
 
       <div style={s.posCard}>
-        <div style={s.posLabel}>Твоя позиция</div>
-        <div style={s.posValue}>{myPos} <span style={s.posOf}>/ 15</span></div>
+        <div style={s.posLabel}>Мой счёт</div>
+        <div style={s.posValue}>
+          {myScore}<span style={s.posOf}> / 11</span>
+        </div>
       </div>
 
-      {leader && leader.id !== player?.id && (
+      {leader && !isLeader && (
         <div style={s.leaderCard}>
-          <span style={{ fontSize: 16 }}>{CHAR_EMOJI[leader.character]}</span>
+          <span style={{ fontSize: 18 }}>{CHAR_EMOJI[leader.character]}</span>
           <span style={s.leaderText}>
-            {leader.name} впереди — позиция {leader.position}
+            {leader.name} впереди — {leader.score ?? 0} очков
           </span>
+        </div>
+      )}
+
+      {isLeader && myScore > 0 && (
+        <div style={s.leadingCard}>
+          <span>👑</span>
+          <span style={s.leadingText}>Ты лидируешь!</span>
         </div>
       )}
 
@@ -76,25 +87,31 @@ const s = {
     fontFamily: "'Cinzel', serif",
     fontSize: 36, color: '#f0d060',
   },
-  posOf: {
-    fontSize: 18, color: '#5a9a30',
-  },
+  posOf: { fontSize: 18, color: '#5a9a30' },
   leaderCard: {
     display: 'flex', alignItems: 'center', gap: 8,
-    background: 'rgba(30,20,4,0.8)',
+    background: 'rgba(30,20,4,0.85)',
     border: '1px solid #3a2a10', borderRadius: 10,
     padding: '8px 16px',
   },
-  leaderText: {
-    fontSize: 12, color: '#c8a830',
+  leaderText: { fontSize: 12, color: '#c8a830' },
+  leadingCard: {
+    display: 'flex', alignItems: 'center', gap: 8,
+    background: 'rgba(30,25,2,0.85)',
+    border: '1px solid rgba(212,175,55,.4)', borderRadius: 10,
+    padding: '8px 20px',
+    boxShadow: '0 0 16px rgba(212,175,55,.12)',
+    animation: 'pulse 2s infinite',
+  },
+  leadingText: {
+    fontSize: 13, color: '#f0d060',
+    fontFamily: "'Cinzel', serif", letterSpacing: 1,
   },
   message: {
     fontSize: 14, color: '#5a9a30',
     letterSpacing: 1, textAlign: 'center',
   },
-  dots: {
-    display: 'flex', gap: 6,
-  },
+  dots: { display: 'flex', gap: 6 },
   dot: {
     fontSize: 8, color: '#2a5a22',
     animation: 'pulse 1.2s infinite',

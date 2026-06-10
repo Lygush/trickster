@@ -25,7 +25,6 @@ export default function App() {
   const [winner,      setWinner]      = useState(null);
   const [qrUrl,       setQrUrl]       = useState(null);
   const [questionNum, setQuestionNum] = useState(0);
-  // Баг 3: задержка появления QuestionReveal чтобы вопрос успел выехать
   const [revealVisible, setRevealVisible] = useState(false);
 
   const socketRef      = useRef(null);
@@ -92,13 +91,11 @@ export default function App() {
     sounds.stopMusic?.();
   };
 
-  const phase          = gameState?.phase   || 'lobby';
-  const players        = gameState?.players || [];
+  const phase           = gameState?.phase   || 'lobby';
+  const players         = gameState?.players || [];
   const currentMinigame = gameState?.currentMinigame;
   const isQuestionPhase = phase === 'question' || phase === 'question_result';
 
-  // Задержка появления QuestionReveal чтобы вопрос успел выехать
-  // (useEffect здесь, ПОСЛЕ объявления phase — иначе TDZ в deps array)
   useEffect(() => {
     if (phase === 'question_result') {
       setRevealVisible(false);
@@ -115,28 +112,23 @@ export default function App() {
 
       <div style={s.layout}>
 
-        {/* ═══ ТОПБАР ═══ */}
+        {/* ═══ ТОПБАР — прогресс слева + чипы игроков справа ═══ */}
         {isQuestionPhase && (
-          <Topbar players={players} answers={answers} revealData={phase === 'question_result' ? revealData : null} />
+          <Topbar
+            players={players}
+            answers={answers}
+            revealData={phase === 'question_result' ? revealData : null}
+            questionIndex={gameState?.questionIndex || 0}
+            phase={phase}
+          />
         )}
 
-        {/* ═══ ТЕЛО ═══ */}
+        {/* ═══ ТЕЛО — без MapPanel, она теперь в топбаре ═══ */}
         <div style={s.body}>
-
-          {/* Минимапа */}
-          {isQuestionPhase && (
-            <MapPanel
-              players={players}
-              questionIndex={gameState?.questionIndex || 0}
-              phase={phase}
-            />
-          )}
-
-          {/* Правая зона */}
           <div style={s.right}>
 
             {/* LOBBY */}
-            {(phase === 'lobby') && (
+            {phase === 'lobby' && (
               <LobbyScreen players={players} qrUrl={qrUrl} serverInfo={serverInfo} onStart={handleStart} assets={assets} />
             )}
 
@@ -170,7 +162,7 @@ export default function App() {
               </>
             )}
 
-            {/* ВОПРОС — результат: анимированный экран */}
+            {/* ВОПРОС — результат */}
             {phase === 'question_result' && revealVisible && gameState?.currentQuestion && (
               <QuestionReveal
                 key={gameState.currentQuestion.id + '_reveal'}
@@ -209,16 +201,24 @@ export default function App() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Topbar
+// Topbar: прогресс-трек слева, чипы игроков справа
 // ─────────────────────────────────────────────────────────────────────────────
-function Topbar({ players, answers, revealData }) {
+function Topbar({ players, answers, revealData, questionIndex, phase }) {
   const sorted   = [...players].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
   const leaderId = sorted[0]?.id;
   const answered = new Set(Object.keys(answers || {}));
 
   return (
     <div style={tb.bar}>
-      <div style={tb.pill}>🕷 Ананси спрашивает</div>
+      {/* ── Прогресс-трек слева ── */}
+      <div style={tb.trackWrap}>
+        <MapPanel questionIndex={questionIndex} phase={phase} />
+      </div>
+
+      {/* ── Разделитель ── */}
+      <div style={tb.sep} />
+
+      {/* ── Чипы игроков справа ── */}
       <div style={tb.chips}>
         {sorted.map(p => {
           const isLead      = p.id === leaderId;
@@ -235,18 +235,16 @@ function Topbar({ players, answers, revealData }) {
               borderColor: isLead ? 'rgba(212,175,55,.45)' : 'rgba(107,199,64,.18)',
               background:  isLead ? 'rgba(30,20,2,.55)'    : 'rgba(5,12,4,.5)',
             }}>
-              {/* Точка-индикатор: показывает ответил/нет и верно/нет цветом */}
               <div style={{
                 width: 7, height: 7, borderRadius: '50%',
-                background: dotColor,
-                flexShrink: 0,
+                background: dotColor, flexShrink: 0,
                 transition: 'background 0.3s',
               }} />
               <div style={{ ...tb.av, borderColor: isLead ? '#d4af37' : 'rgba(107,199,64,.4)' }}>
                 {CHAR_EMOJI[p.character] || '?'}
               </div>
               <span style={{ ...tb.name, color: isLead ? '#d4af37' : 'rgba(150,220,90,.6)' }}>
-                {p.name.length > 7 ? p.name.slice(0,7)+'…' : p.name}
+                {p.name.length > 7 ? p.name.slice(0, 7) + '…' : p.name}
               </span>
               <span style={tb.score}>{p.score ?? 0}</span>
             </div>
@@ -260,24 +258,33 @@ function Topbar({ players, answers, revealData }) {
 const tb = {
   bar: {
     height: '8vh', minHeight: 52, maxHeight: 80,
-    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    display: 'flex', alignItems: 'center',
     background: 'rgba(4,10,3,.82)',
     borderBottom: '1px solid rgba(212,175,55,.15)',
     padding: '0 2vw', gap: '1.5vw',
     flexShrink: 0, zIndex: 20, position: 'relative',
   },
-  pill: {
-    fontFamily: "'Cinzel',serif",
-    fontSize: 'clamp(14px,1.4vw,22px)',
-    color: '#c7a84b', letterSpacing: '.06em',
-    whiteSpace: 'nowrap', flexShrink: 0,
+  trackWrap: {
+    flexShrink: 0,
+    display: 'flex', alignItems: 'center',
   },
-  chips: { display: 'flex', alignItems: 'center', gap: '1vw', flexWrap: 'nowrap' },
+  sep: {
+    width: 1, height: '60%',
+    background: 'rgba(212,175,55,.15)',
+    flexShrink: 0,
+  },
+  chips: {
+    display: 'flex', alignItems: 'center',
+    gap: '1vw', flexWrap: 'nowrap',
+    flex: 1, justifyContent: 'flex-end',
+    minWidth: 0,
+  },
   chip: {
     display: 'flex', alignItems: 'center', gap: '0.4vw',
     border: '1px solid', borderRadius: 30,
     padding: '0.5vh 1.2vw 0.5vh 0.6vw',
     transition: 'border-color .3s, background .3s',
+    flexShrink: 0,
   },
   av: {
     width: '4vh', height: '4vh', minWidth: 28, minHeight: 28,
@@ -288,11 +295,10 @@ const tb = {
   },
   name:  { fontSize: 'clamp(12px,1.2vw,20px)', fontFamily: "'Cinzel',serif", whiteSpace: 'nowrap' },
   score: { fontSize: 'clamp(14px,1.5vw,24px)', color: '#9de05a', fontWeight: 700, marginLeft: '0.4vw' },
-  dot:   { fontSize: 'clamp(8px,0.8vw,11px)', fontWeight: 900, marginLeft: '0.1vw' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// TimerBar
+// TimerBar — с danger-пульсом
 // ─────────────────────────────────────────────────────────────────────────────
 function TimerBar({ questionId, paused }) {
   const [t, setT] = useState(ANSWER_TIME);
@@ -309,7 +315,7 @@ function TimerBar({ questionId, paused }) {
     return () => clearInterval(ref.current);
   }, [questionId, paused]);
 
-  const pct = (t / ANSWER_TIME) * 100;
+  const pct       = (t / ANSWER_TIME) * 100;
   const isDanger  = t <= 8;
   const isWarning = t <= 14 && !isDanger;
   const numColor  = isDanger ? '#f06060' : isWarning ? '#f0a040' : '#c6f060';
@@ -319,17 +325,26 @@ function TimerBar({ questionId, paused }) {
       ? 'linear-gradient(90deg,#c08020,#f0c060)'
       : 'linear-gradient(90deg,#6bc740,#c6f060)';
 
+  // Размер цифры таймера растёт по мере опасности
+  const numSize = isDanger
+    ? 'clamp(42px,5.2vw,76px)'
+    : isWarning
+      ? 'clamp(38px,4.6vw,68px)'
+      : 'clamp(36px,4.2vw,64px)';
+
   return (
-    <div style={tm.row}>
-      {/* Левая полоска — уменьшается справа налево */}
+    <div style={{
+      ...tm.row,
+      animation: isDanger ? 'timerDanger 0.6s ease-in-out infinite' : 'none',
+    }}>
       <div style={tm.barWrap}>
         <div style={{ ...tm.fill, ...tm.fillLeft, width: `${pct}%`, background: barGrad }} />
       </div>
 
-      {/* Число по центру */}
-      <div style={{ ...tm.num, color: numColor }}>{t}</div>
+      <div style={{ ...tm.num, color: numColor, fontSize: numSize, transition: 'color .5s, font-size .3s' }}>
+        {t}
+      </div>
 
-      {/* Правая полоска — уменьшается слева направо */}
       <div style={tm.barWrap}>
         <div style={{ ...tm.fill, width: `${pct}%`, background: barGrad }} />
       </div>
@@ -344,12 +359,10 @@ const tm = {
   },
   num: {
     fontFamily: "'Cinzel',serif",
-    fontSize: 'clamp(36px,4.2vw,64px)',
     fontWeight: 700, lineHeight: 1,
     minWidth: '4.5vw', textAlign: 'center',
-    transition: 'color .5s', flexShrink: 0,
+    flexShrink: 0,
   },
-  /* Контейнер полоски */
   barWrap: {
     flex: 1,
     height: '1.4vh', minHeight: 8,
@@ -362,12 +375,11 @@ const tm = {
     transition: 'width 1s linear, background .5s',
     flexShrink: 0,
   },
-  /* Левая полоска — прижата к правому краю контейнера, убывает справа налево */
   fillLeft: { marginLeft: 'auto' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// QuestionCard
+// QuestionCard — с stagger на вариантах ответов
 // ─────────────────────────────────────────────────────────────────────────────
 function QuestionCard({ question, revealData }) {
   if (!question) return null;
@@ -381,8 +393,10 @@ function QuestionCard({ question, revealData }) {
           return (
             <div key={i} style={{
               ...qc.ans,
-              ...(isCorrect ? qc.ansOk   : {}),
+              ...(isCorrect ? qc.ansOk    : {}),
               ...(isWrong   ? qc.ansWrong : {}),
+              // Stagger: каждый вариант появляется с задержкой 80ms
+              animation: `answerStagger 0.38s cubic-bezier(0.22,0.61,0.36,1) ${i * 80}ms both`,
             }}>
               <div style={{ ...qc.key, ...(isCorrect ? qc.keyOk : {}) }}>{LETTERS[i]}</div>
               <span style={qc.ansText}>{ans}</span>
@@ -416,10 +430,10 @@ const qc = {
     borderRadius: '0.9vw',
     padding: '1.6vh 1.8vw',
     display: 'flex', alignItems: 'center', gap: '0.6vw',
-    transition: 'all .3s',
+    transition: 'border-color .3s, background .3s, opacity .3s',
   },
-  ansOk:   { borderColor: 'rgba(107,199,64,.7)', background: 'rgba(20,55,10,.92)', boxShadow: '0 0 12px rgba(107,199,64,.2)' },
-  ansWrong:{ opacity: 0.28 },
+  ansOk:    { borderColor: 'rgba(107,199,64,.7)', background: 'rgba(20,55,10,.92)', boxShadow: '0 0 12px rgba(107,199,64,.2)' },
+  ansWrong: { opacity: 0.28 },
   key: {
     width: 'clamp(34px,4vh,54px)', height: 'clamp(34px,4vh,54px)',
     borderRadius: '50%', flexShrink: 0,
@@ -471,7 +485,7 @@ function FinalRace({ gameState, players }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CharAvatar (экспорт для дочерних компонентов)
+// CharAvatar
 // ─────────────────────────────────────────────────────────────────────────────
 export function CharAvatar({ character, assets, size = 32, style = {} }) {
   const imgUrl = character ? assets?.characters?.[character] : null;
@@ -493,10 +507,10 @@ const s = {
     display: 'flex', flexDirection: 'column', gap: '1.4vh',
   },
 
-  centered: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 20 },
-  bigIcon:  { fontSize: 'clamp(48px,7vw,96px)', animation: 'pulse 2s infinite' },
-  titleText:{ fontFamily: "'Cinzel',serif", fontSize: 'clamp(20px,3.5vw,52px)', color: '#f0d060', letterSpacing: 2, textShadow: '0 0 30px rgba(200,168,48,.4)' },
-  subText:  { fontSize: 'clamp(10px,1vw,16px)', color: '#5a9a30', letterSpacing: 3, textTransform: 'uppercase' },
+  centered:  { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 20 },
+  bigIcon:   { fontSize: 'clamp(48px,7vw,96px)', animation: 'pulse 2s infinite' },
+  titleText: { fontFamily: "'Cinzel',serif", fontSize: 'clamp(20px,3.5vw,52px)', color: '#f0d060', letterSpacing: 2, textShadow: '0 0 30px rgba(200,168,48,.4)' },
+  subText:   { fontSize: 'clamp(10px,1vw,16px)', color: '#5a9a30', letterSpacing: 3, textTransform: 'uppercase' },
 
   finalCard:  { background: 'rgba(4,12,5,.88)', border: '1px solid rgba(212,175,55,.2)', borderRadius: 14, padding: '14px 26px', backdropFilter: 'blur(10px)', maxWidth: 640 },
   finalQ:     { fontFamily: "'Cinzel',serif", fontSize: 'clamp(13px,1.6vw,22px)', color: '#e8f5d0' },

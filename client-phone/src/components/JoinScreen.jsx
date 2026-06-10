@@ -9,12 +9,27 @@ export default function JoinScreen({ onJoin, error }) {
     onJoin(trimmed);
   };
 
-  const handleKey = (e) => {
-    if (e.key === 'Enter') handleSubmit();
-  };
-
   return (
     <div style={s.wrap}>
+      {/* Паутина — рисуется через stroke-dashoffset */}
+      <svg
+        style={s.web}
+        viewBox="0 0 120 120"
+        fill="none"
+        aria-hidden="true"
+      >
+        <g stroke="#4a8828" strokeWidth="0.8">
+          <line x1="60" y1="0"  x2="60"  y2="120" style={webLine(0)} />
+          <line x1="0"  y1="60" x2="120" y2="60"  style={webLine(0.1)} />
+          <line x1="17" y1="17" x2="103" y2="103" style={webLine(0.2)} />
+          <line x1="103" y1="17" x2="17" y2="103" style={webLine(0.3)} />
+          <circle cx="60" cy="60" r="14" strokeDasharray="90" style={webLine(0.4)} />
+          <circle cx="60" cy="60" r="28" strokeDasharray="180" style={webLine(0.5)} />
+          <circle cx="60" cy="60" r="42" strokeDasharray="270" style={webLine(0.6)} />
+          <circle cx="60" cy="60" r="56" strokeDasharray="360" style={webLine(0.7)} />
+        </g>
+      </svg>
+
       <div style={s.spider}>🕸️</div>
       <div style={s.title}>Сквозь Чащу</div>
       <div style={s.sub}>Ананси ждёт тебя</div>
@@ -28,7 +43,7 @@ export default function JoinScreen({ onJoin, error }) {
           maxLength={20}
           value={name}
           onChange={e => setName(e.target.value)}
-          onKeyDown={handleKey}
+          onKeyDown={e => e.key === 'Enter' && handleSubmit()}
           autoFocus
           autoComplete="off"
           autoCorrect="off"
@@ -47,16 +62,33 @@ export default function JoinScreen({ onJoin, error }) {
   );
 }
 
+// Генерирует inline-стиль для линии паутины с анимацией
+function webLine(delay) {
+  return {
+    strokeDasharray: 600,
+    strokeDashoffset: 600,
+    animation: `webDraw 1.2s ease ${delay}s forwards`,
+    opacity: 0.35,
+  };
+}
+
 const s = {
   wrap: {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', justifyContent: 'center',
     height: '100%', gap: 20, padding: '0 24px',
     animation: 'fadeIn 0.4s ease',
+    position: 'relative',
+  },
+  web: {
+    position: 'absolute', top: 0, right: 0,
+    width: 140, height: 140,
+    opacity: 1, pointerEvents: 'none',
   },
   spider: {
     fontSize: 64,
     filter: 'drop-shadow(0 0 20px rgba(200,168,48,0.4))',
+    animation: 'bounceIn 0.6s cubic-bezier(0.175,0.885,0.32,1.275) 0.3s both',
   },
   title: {
     fontFamily: "'Cinzel', serif",
@@ -76,6 +108,7 @@ const s = {
     borderRadius: 16, padding: '24px 20px',
     backdropFilter: 'blur(10px)',
     display: 'flex', flexDirection: 'column', gap: 12,
+    animation: 'slideUp 0.45s 0.15s ease both',
   },
   label: {
     fontSize: 11, color: '#3a6028',
@@ -91,6 +124,7 @@ const s = {
     fontSize: 18,
     fontFamily: "'Nunito', sans-serif",
     outline: 'none',
+    transition: 'border-color .2s',
   },
   error: {
     fontSize: 12, color: '#c84830',
@@ -103,7 +137,9 @@ const s = {
     background: 'linear-gradient(135deg, #c8a830, #f0d060)',
     border: 'none', borderRadius: 30,
     padding: '14px', cursor: 'pointer',
-    transition: 'opacity .2s',
+    transition: 'opacity .2s, transform .1s',
     marginTop: 4,
+    // active через CSS — не через JS
+    WebkitTapHighlightColor: 'transparent',
   },
 };

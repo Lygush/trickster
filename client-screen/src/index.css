@@ -27,6 +27,11 @@ body {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes answerStagger {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.5; }
@@ -67,8 +72,28 @@ body {
   to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 
-/* Барабан слота — CSS-переменные задаются инлайн, все старты в одном кадре */
+/* Барабан слота */
 @keyframes slotRoll {
   from { transform: translateY(var(--slot-from)); }
   to   { transform: translateY(var(--slot-to)); }
+}
+
+/* Прогресс-точка прыгает при продвижении */
+@keyframes dotJump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.55) translateY(-3px); }
+  65%  { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+/* Пульс таймера в опасной зоне */
+@keyframes timerDanger {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.75; transform: scale(1.08); }
+}
+
+/* Конфетти-частицы */
+@keyframes confettiFall {
+  0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
 }
