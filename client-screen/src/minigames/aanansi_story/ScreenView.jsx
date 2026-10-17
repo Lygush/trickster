@@ -1,109 +1,100 @@
 import React from 'react';
+import { CHAR_EMOJI, plural } from '../../shared/constants';
 
-const CHAR_EMOJI = { spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎' };
-
-/**
- * ИсторияАнансиScreen — большой экран мини-игры «История Ананси».
- *
- * Фазы: write (ждём текстов) → reveal (показываем все варианты по очереди)
- */
+// write  — промпт и кто уже написал
+// vote   — анонимные варианты (номера), кто проголосовал
+// reveal — варианты с авторами и голосами, лучшие сверху
 export default function AanansiStoryScreen({ minigame, players }) {
-  const data        = minigame?.data     || {};
-  const prompt      = data.prompt        || 'Однажды в чаще леса...';
-  const submissions = data.submissions   || {};
-  const phase       = data.phase         || 'write';
-  const current     = data.currentIndex;   // индекс показываемого текста в reveal
-
-  const submitted = Object.keys(submissions).length;
-  const total     = players.length;
-
-  const allTexts = Object.entries(submissions).map(([id, text]) => ({
-    player: players.find(p => p.id === id),
-    text,
-  }));
+  const stage = minigame?.stage;
+  const data  = minigame?.data || {};
+  const online = players.filter(p => p.connected);
 
   return (
     <div style={s.wrap}>
-      <div style={s.header}>
-        <div style={s.spider}>🕷️</div>
-        <div style={s.title}>История Ананси</div>
-        <div style={s.prompt}>«{prompt}»</div>
+      <div style={s.prompt}>
+        <span style={s.spider}>🕷️</span>
+        «{data.prompt}»
       </div>
 
-      {phase === 'write' && (
+      {stage === 'write' && (
         <div style={s.waiting}>
-          <div style={s.waitCount}>{submitted} / {total}</div>
-          <div style={s.waitLabel}>игроков пишут продолжение</div>
-          <div style={s.dots}>
-            {players.map(p => (
-              <div key={p.id} style={{
-                ...s.dot,
-                background: submissions[p.id] !== undefined ? '#5a9a30' : '#1a2a18',
-              }} title={p.name} />
-            ))}
+          <div style={s.waitLabel}>Игроки пишут продолжение...</div>
+          <div style={s.chips}>
+            {online.map(p => {
+              const done = (data.submittedIds || []).includes(p.id);
+              return (
+                <div key={p.id} style={{ ...s.chip, opacity: done ? 1 : 0.35 }}>
+                  <span style={{ fontSize: 'clamp(22px,2.2vw,36px)' }}>{CHAR_EMOJI[p.character]}</span>
+                  <span style={s.chipName}>{p.name}</span>
+                  <span style={s.chipMark}>{done ? '✍ готово' : '✍ ...'}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {phase === 'reveal' && (
+      {(stage === 'vote' || data.revealed) && (
         <div style={s.stories}>
-          {allTexts.map(({ player, text }, i) => (
-            <div key={i} style={{
-              ...s.storyCard,
-              opacity: current === undefined || current === i ? 1 : 0.35,
-              transform: current === i ? 'scale(1.03)' : 'scale(1)',
-              transition: 'all 0.5s ease',
-            }}>
-              {player && (
-                <div style={s.storyAuthor}>
-                  <span style={{ fontSize: 20 }}>{CHAR_EMOJI[player.character] || '⭕'}</span>
-                  <span style={s.authorName}>{player.name}</span>
+          {(data.entries || []).map((e, i) => {
+            const author = data.revealed ? players.find(p => p.id === e.authorId) : null;
+            const best = data.revealed && i === 0 && e.votes > 0;
+            return (
+              <div key={e.id} style={{
+                ...s.storyCard,
+                borderColor: best ? '#c8a830' : 'rgba(107,199,64,.25)',
+                background: best ? 'rgba(30,25,4,.92)' : 'rgba(4,12,5,.88)',
+                animation: `fadeIn .4s ease ${i * 0.12}s both`,
+              }}>
+                <div style={s.storyHead}>
+                  {data.revealed ? (
+                    <>
+                      <span style={{ fontSize: 'clamp(18px,1.8vw,30px)' }}>{CHAR_EMOJI[author?.character] || '⭕'}</span>
+                      <span style={s.authorName}>{author?.name}</span>
+                      <span style={s.votes}>{best && '👑 '}{e.votes} {plural(e.votes, 'голос', 'голоса', 'голосов')}</span>
+                    </>
+                  ) : (
+                    <span style={s.num}>Вариант {i + 1}</span>
+                  )}
                 </div>
-              )}
-              <div style={s.storyText}>«{text}»</div>
-            </div>
-          ))}
+                <div style={s.storyText}>{e.text}</div>
+              </div>
+            );
+          })}
         </div>
+      )}
+
+      {stage === 'vote' && (
+        <div style={s.voteStatus}>Голосуйте на телефонах! Проголосовали: {(data.votedIds || []).length} / {online.length}</div>
       )}
     </div>
   );
 }
 
 const s = {
-  wrap: {
-    display: 'flex', flexDirection: 'column',
-    alignItems: 'center', height: '100%',
-    padding: '24px 48px', gap: 24,
-    animation: 'fadeIn 0.4s ease', overflowY: 'auto',
-  },
-  header: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 },
-  spider: { fontSize: 48, animation: 'pulse 1.5s infinite' },
-  title: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 'clamp(22px, 3vw, 36px)', color: '#f0d060', letterSpacing: 2,
-  },
+  wrap: { display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', padding: '3vh 4vw', gap: '2.4vh', overflowY: 'auto' },
   prompt: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 'clamp(14px, 1.8vw, 20px)', color: '#d8f0b0',
-    fontStyle: 'italic', textAlign: 'center', maxWidth: 600, lineHeight: 1.5,
-    background: 'rgba(4,12,5,0.8)', border: '1px solid #1c3a1a',
-    borderRadius: 12, padding: '14px 24px',
+    fontFamily: "'Cinzel', serif", fontSize: 'clamp(18px, 2.2vw, 36px)', color: '#e8f5d0',
+    fontStyle: 'italic', textAlign: 'center', maxWidth: 1300, lineHeight: 1.45,
+    background: 'rgba(4,12,5,0.85)', border: '1px solid rgba(212,175,55,.3)', borderRadius: 16, padding: '2vh 3vw',
   },
-  waiting: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
-  waitCount: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 48, color: '#f0d060',
+  spider: { marginRight: 12, fontStyle: 'normal' },
+  waiting: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3vh' },
+  waitLabel: { fontSize: 'clamp(16px,1.6vw,26px)', color: '#9aca70', letterSpacing: 1 },
+  chips: { display: 'flex', gap: '1.4vw', flexWrap: 'wrap', justifyContent: 'center' },
+  chip: {
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+    background: 'rgba(10,22,10,.85)', border: '1px solid #2a5a22', borderRadius: 16, padding: '1.4vh 1.6vw', minWidth: '10vw',
+    transition: 'opacity .3s',
   },
-  waitLabel: { fontSize: 13, color: '#5a9a30', letterSpacing: 1 },
-  dots: { display: 'flex', gap: 10, marginTop: 8 },
-  dot: { width: 14, height: 14, borderRadius: '50%', transition: 'background 0.4s ease' },
-  stories: { display: 'flex', flexDirection: 'column', gap: 14, width: '100%', maxWidth: 640 },
-  storyCard: {
-    background: 'rgba(4,12,5,0.85)', border: '1px solid #1c3a1a',
-    borderRadius: 14, padding: '18px 22px',
-    backdropFilter: 'blur(8px)',
-  },
-  storyAuthor: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 },
-  authorName: { fontFamily: "'Cinzel', serif", fontSize: 13, color: '#c8a830', letterSpacing: 1 },
-  storyText: { fontSize: 16, color: '#d8f0b0', fontStyle: 'italic', lineHeight: 1.6 },
+  chipName: { fontFamily: "'Cinzel',serif", fontSize: 'clamp(14px,1.3vw,22px)', color: '#d8f0b0' },
+  chipMark: { fontSize: 'clamp(12px,1vw,16px)', color: '#9de05a' },
+  stories: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(32vw, 1fr))', gap: '1.6vh 1.6vw', width: '100%' },
+  storyCard: { border: '1.5px solid', borderRadius: 16, padding: '1.8vh 1.6vw', backdropFilter: 'blur(8px)' },
+  storyHead: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: '1vh' },
+  num: { fontFamily: "'Cinzel',serif", fontSize: 'clamp(13px,1.2vw,20px)', color: '#c8a830', letterSpacing: 2 },
+  authorName: { fontFamily: "'Cinzel', serif", fontSize: 'clamp(14px,1.3vw,22px)', color: '#c8a830' },
+  votes: { marginLeft: 'auto', fontSize: 'clamp(14px,1.3vw,22px)', color: '#f0d060', fontWeight: 700 },
+  storyText: { fontSize: 'clamp(16px,1.6vw,26px)', color: '#d8f0b0', lineHeight: 1.45 },
+  voteStatus: { fontSize: 'clamp(14px,1.3vw,22px)', color: '#c8a830', fontFamily: "'Cinzel',serif" },
 };

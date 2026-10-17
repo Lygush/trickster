@@ -11,6 +11,7 @@ const PHASE_TO_BG = {
   minigame:         null,
   final_race_intro: 'final_race',
   final_race:       'final_race',
+  final_result:     'final_race',
   winner:           'winner',
 };
 

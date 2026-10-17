@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 
-export default function JoinScreen({ onJoin, error }) {
-  const [name, setName] = useState('');
+export default function JoinScreen({ onJoin, error, busy, defaultName = '', gameRunning, full }) {
+  const [name, setName] = useState(defaultName);
 
   const handleSubmit = () => {
     const trimmed = name.trim();
-    if (trimmed.length < 1) return;
+    if (trimmed.length < 1 || busy) return;
     onJoin(trimmed);
   };
 
@@ -40,7 +40,7 @@ export default function JoinScreen({ onJoin, error }) {
           style={s.input}
           type="text"
           placeholder="Введи имя..."
-          maxLength={20}
+          maxLength={16}
           value={name}
           onChange={e => setName(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && handleSubmit()}
@@ -50,12 +50,14 @@ export default function JoinScreen({ onJoin, error }) {
           spellCheck={false}
         />
         {error && <div style={s.error}>{error}</div>}
+        {gameRunning && !error && <div style={s.notice}>Партия уже идёт — войти можно будет в следующую</div>}
+        {full && !gameRunning && !error && <div style={s.notice}>Все места заняты</div>}
         <button
-          style={{ ...s.btn, opacity: name.trim() ? 1 : 0.4 }}
+          style={{ ...s.btn, opacity: name.trim() && !busy ? 1 : 0.4 }}
           onClick={handleSubmit}
-          disabled={!name.trim()}
+          disabled={!name.trim() || busy}
         >
-          Войти в чащу →
+          {busy ? 'Входим...' : 'Войти в чащу →'}
         </button>
       </div>
     </div>
@@ -111,7 +113,7 @@ const s = {
     animation: 'slideUp 0.45s 0.15s ease both',
   },
   label: {
-    fontSize: 11, color: '#3a6028',
+    fontSize: 11, color: '#7aaa50',
     letterSpacing: 2, textTransform: 'uppercase',
   },
   input: {
@@ -127,9 +129,10 @@ const s = {
     transition: 'border-color .2s',
   },
   error: {
-    fontSize: 12, color: '#c84830',
+    fontSize: 13, color: '#f07060',
     textAlign: 'center',
   },
+  notice: { fontSize: 12, color: '#c8a830', textAlign: 'center', lineHeight: 1.4 },
   btn: {
     fontFamily: "'Cinzel', serif",
     fontSize: 14, letterSpacing: 1,

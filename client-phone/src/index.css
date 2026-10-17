@@ -112,3 +112,24 @@ body {
   65%  { transform: scale(1.18) rotate(4deg); }
   100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+/* Перевёрнутый экран — помеха 3-го уровня */
+@keyframes flipIn {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(180deg); }
+}
+
+/* Ответы «скачут» — помеха лидеру */
+@keyframes jitter {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-2px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-1px, -2px); }
+}
+
+input, textarea { user-select: text; }

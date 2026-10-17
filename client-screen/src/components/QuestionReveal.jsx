@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { CHAR_EMOJI, LETTERS } from '../shared/constants';
 
-const CHAR_EMOJI = { spider: '🕷️', frog: '🐸', snake: '🐍', beetle: '🪲', lizard: '🦎' };
-const LETTERS    = ['А', 'Б', 'В', 'Г'];
-const MAX_SCORE  = 15;
+const MAX_SCORE  = 40;
 const ITEM_H     = 48; // px — высота одной цифры в барабане
 
 // ─── Барабан ──────────────────────────────────────────────────────────────────
@@ -44,8 +43,8 @@ function SlotDrum({ prevScore, score, active, color }) {
 }
 
 // ─── Карточка игрока ──────────────────────────────────────────────────────────
-function PlayerCard({ player, isCorrect, prevScore, animateScore, entryDelay }) {
-  const scoreColor = isCorrect ? '#7dd44a' : '#a8a090';
+function PlayerCard({ player, isCorrect, helped, hindered, prevScore, animateScore, entryDelay }) {
+  const scoreColor = isCorrect || helped ? '#7dd44a' : '#a8a090';
 
   return (
     <div style={{
@@ -113,6 +112,10 @@ function PlayerCard({ player, isCorrect, prevScore, animateScore, entryDelay }) 
         {CHAR_EMOJI[player.character] || '?'}
       </div>
 
+      {/* Помощь / помеха Ананси */}
+      {helped && <div style={badge('#c8a830')}>🕷️ Ананси подтолкнул +1</div>}
+      {hindered > 0 && <div style={badge('#e08040')}>{'⚡'.repeat(hindered)} помеха лидеру</div>}
+
       {/* Барабан с очками — без фона */}
       <SlotDrum
         prevScore={prevScore}
@@ -131,11 +134,11 @@ function PlayerCard({ player, isCorrect, prevScore, animateScore, entryDelay }) 
 //  1 800 ms    → ответ на месте, пауза 200ms
 //  2 000 ms    → первая карточка влетает (+ stagger 140ms на каждую)
 //  + lastLands + 350ms → барабаны крутятся синхронно
-export default function QuestionReveal({ question, revealData, players }) {
+export default function QuestionReveal({ question, result, players }) {
   const [phase, setPhase] = useState('answer');
 
   useEffect(() => {
-    if (!revealData) return;
+    if (!result) return;
     setPhase('answer');
 
     const total     = players.length || 1;
@@ -147,20 +150,16 @@ export default function QuestionReveal({ question, revealData, players }) {
     const t2 = setTimeout(() => setPhase('cards'),   cardsAt);
     const t3 = setTimeout(() => setPhase('scores'),  scoresAt);
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
-  }, [revealData?.correctIndex]); // eslint-disable-line
+  }, [question?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!question || !revealData) return null;
+  if (!question || !result) return null;
 
-  const { correctIndex, moved = [], players: revealPlayers = [] } = revealData;
-
-  const enriched = players.map(p => {
-    const rp = revealPlayers.find(x => x.id === p.id) || p;
-    return { ...p, score: rp.score ?? p.score ?? 0 };
-  });
+  const { correctIndex, correctIds = [], helped = [], deltas = {}, hindered = {} } = result;
+  const enriched = players;
 
   const showCards  = phase === 'cards' || phase === 'scores';
   const answerMoved = phase !== 'answer';  // начинаем двигать уже на 'sliding'
-  const cols        = Math.min(enriched.length, 4);
+  const cols        = Math.min(enriched.length, 5);
 
   return (
     <div style={{
@@ -238,16 +237,18 @@ export default function QuestionReveal({ question, revealData, players }) {
           gridTemplateColumns  : `repeat(${cols}, 1fr)`,
           gap                  : 'clamp(8px,1.2vw,18px)',
           width                : '100%',
-          maxWidth             : '88vw',
+          maxWidth             : `${Math.min(88, cols * 19)}vw`,
         }}>
           {enriched.map((p, i) => {
-            const isCorrect = moved.includes(p.id);
-            const prevScore = p.score - (isCorrect ? 1 : 0);
+            const isCorrect = correctIds.includes(p.id);
+            const prevScore = Math.max(0, p.score - (deltas[p.id] || 0));
             return (
               <PlayerCard
                 key={p.id}
                 player={p}
                 isCorrect={isCorrect}
+                helped={helped.includes(p.id)}
+                hindered={hindered[p.id] || 0}
                 prevScore={prevScore}
                 animateScore={phase === 'scores'}
                 entryDelay={80 + i * 140}
@@ -258,4 +259,12 @@ export default function QuestionReveal({ question, revealData, players }) {
       )}
     </div>
   );
+}
+
+function badge(color) {
+  return {
+    fontSize: 'clamp(10px,0.95vw,14px)', color, border: `1px solid ${color}`,
+    borderRadius: 12, padding: '2px 8px', whiteSpace: 'nowrap',
+    animation: 'fadeIn .4s ease .6s both',
+  };
 }

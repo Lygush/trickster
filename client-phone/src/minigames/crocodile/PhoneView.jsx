@@ -1,145 +1,90 @@
 import React, { useState } from 'react';
+import { CHAR_EMOJI } from '../../shared/constants';
+import { ui } from '../ui';
 
-/**
- * КрокодилPhone — телефон игрока в мини-игре «Крокодил».
- *
- * Механика:
- *   Один игрок (showman) показывает слово жестами перед экраном.
- *   Остальные угадывают и нажимают кнопку «Угадал!» (или шлют guess).
- *   Большой экран показывает слово только showman-у через камеру.
- *
- * Props:
- *   minigame — { data: { showmanId, word, guesses, revealed } }
- *   myId, onEmit
- */
-export default function CrocodilePhone({ minigame, myId, onEmit }) {
-  const data       = minigame?.data || {};
-  const showmanId  = data.showmanId;
-  const word       = data.word      || '???';
-  const guesses    = data.guesses   || {};
-  const revealed   = data.revealed  || false;
-  const isShowman  = showmanId === myId;
-  const myGuess    = guesses[myId];
+export default function CrocodilePhone({ minigame, priv, me, players, onAction }) {
+  const data = minigame.data || {};
+  const [guess, setGuess] = useState('');
+  const showman = players.find(p => p.id === data.showmanId);
+  const isShowman = priv.role === 'showman';
 
-  const [guessText, setGuessText] = useState('');
+  if (data.revealed) {
+    const winner = players.find(p => p.id === data.winnerId);
+    return (
+      <div style={{ ...ui.wrap, ...ui.center }}>
+        <div style={ui.label}>Слово было</div>
+        <div style={{ fontFamily: "'Cinzel',serif", fontSize: 36, color: '#f0d060', animation: 'bounceIn .5s ease' }}>{data.word}</div>
+        <div style={ui.big}>
+          {winner ? (winner.id === me.id ? 'Ты угадал! +2' : `Угадал ${winner.name}`) : 'Никто не угадал'}
+        </div>
+        {isShowman && winner && <div style={{ color: '#9de05a' }}>Отличный показ! +1</div>}
+      </div>
+    );
+  }
 
-  const handleGuess = () => {
-    const trimmed = guessText.trim();
-    if (!trimmed) return;
-    onEmit('croc_guess', { text: trimmed });
-    setGuessText('');
-  };
-
-  // Показываем слово только ведущему
   if (isShowman) {
+    const skipsLeft = (data.maxSkips ?? 2) - (data.skips || 0);
     return (
-      <div style={s.wrap}>
-        <div style={s.spider}>🕷️</div>
-        <div style={s.roleLabel}>ТЫ ПОКАЗЫВАЕШЬ</div>
-        <div style={s.wordCard}>
-          <div style={s.wordLabel}>Слово:</div>
-          <div style={s.word}>{word}</div>
+      <div style={{ ...ui.wrap, ...ui.center }}>
+        <div style={{ ...ui.label, color: '#c8a830' }}>Ты показываешь</div>
+        <div style={{
+          ...ui.card, textAlign: 'center', borderColor: '#c8a830', borderWidth: 2,
+          boxShadow: '0 0 30px rgba(200,168,48,0.2)', padding: '24px 16px',
+        }}>
+          <div style={{ fontFamily: "'Cinzel',serif", fontSize: 38, color: '#f0d060' }}>{priv.word}</div>
         </div>
-        <div style={s.desc}>
-          Встань перед большим экраном.<br/>
-          Покажи слово жестами — без звука!
+        <div style={{ fontSize: 15, color: '#c8e8a0', textAlign: 'center', lineHeight: 1.5 }}>
+          Встань перед экраном и покажи слово жестами.<br />Никаких звуков и букв в воздухе!
         </div>
-        {revealed && (
-          <div style={s.result}>Время вышло!</div>
-        )}
+        <button style={{ ...ui.goldBtn, background: 'rgba(30,24,4,.9)', color: '#d8b040', border: '1px solid #8a7020', opacity: skipsLeft ? 1 : 0.4 }}
+          disabled={!skipsLeft} onClick={() => onAction('skip_word')}>
+          ↻ Другое слово ({skipsLeft})
+        </button>
+        <div style={{ fontSize: 12, color: '#7a9a60' }}>Догадок: {data.guesses?.length || 0}</div>
       </div>
     );
   }
 
-  // Угадывающий
-  if (revealed) {
-    return (
-      <div style={s.wrap}>
-        <div style={s.spider}>🕷️</div>
-        <div style={s.title}>Слово было:</div>
-        <div style={s.revealWord}>{word}</div>
-      </div>
-    );
-  }
+  const send = () => {
+    const t = guess.trim();
+    if (!t) return;
+    onAction('guess', { text: t });
+    setGuess('');
+  };
+  const myGuesses = (data.guesses || []).filter(g => g.playerId === me.id).slice(-3).reverse();
 
   return (
-    <div style={s.wrap}>
-      <div style={s.spider}>🕷️</div>
-      <div style={s.title}>Крокодил</div>
-      <div style={s.desc}>Смотри на большой экран и угадывай слово!</div>
-
-      <div style={s.inputRow}>
-        <input
-          style={s.input}
-          value={guessText}
-          onChange={e => setGuessText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && handleGuess()}
-          placeholder="Твой вариант..."
-          maxLength={40}
-          autoComplete="off"
-        />
-        <button
-          style={{ ...s.btn, opacity: guessText.trim() ? 1 : 0.4 }}
-          onClick={handleGuess}
-          disabled={!guessText.trim()}
-        >→</button>
+    <div style={ui.wrap}>
+      {showman && (
+        <div style={{ ...ui.card, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 34 }}>{CHAR_EMOJI[showman.character]}</span>
+          <span style={{ color: '#c8e8a0', fontSize: 15 }}><b style={{ color: '#f0d060' }}>{showman.name}</b> показывает. Угадывай!</span>
+        </div>
+      )}
+      <div style={{ fontSize: 13, color: '#7aaa50' }}>
+        Слово: {(data.wordShape || []).map(n => '_'.repeat(n)).join(' ')} ({(data.wordShape || []).reduce((a, b) => a + b, 0)} букв)
       </div>
-
-      {myGuess && (
-        <div style={s.myGuessHint}>
-          Твой последний ответ: <strong style={{ color: '#c8a830' }}>{myGuess}</strong>
+      <form style={{ display: 'flex', gap: 8, width: '100%' }} onSubmit={(e) => { e.preventDefault(); send(); }}>
+        <input
+          style={{
+            flex: 1, minWidth: 0, background: '#0a1a0a', border: '1px solid #3a6a28', borderRadius: 12,
+            padding: '14px 16px', color: '#e8f5d0', fontSize: 17, fontFamily: "'Nunito', sans-serif", outline: 'none',
+          }}
+          value={guess}
+          onChange={e => setGuess(e.target.value)}
+          placeholder="Твоя догадка..."
+          maxLength={40}
+          autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+          enterKeyHint="send"
+        />
+        <button type="submit" style={{ ...ui.goldBtn, width: 'auto', borderRadius: 12, padding: '0 20px', fontSize: 20, opacity: guess.trim() ? 1 : 0.4 }}>→</button>
+      </form>
+      {myGuesses.length > 0 && (
+        <div style={{ width: '100%' }}>
+          <div style={ui.label}>Мимо:</div>
+          {myGuesses.map((g, i) => <div key={i} style={{ color: '#a08070', fontSize: 14, marginTop: 4 }}>✗ {g.text}</div>)}
         </div>
       )}
     </div>
   );
 }
-
-const s = {
-  wrap: {
-    display: 'flex', flexDirection: 'column',
-    alignItems: 'center', justifyContent: 'center',
-    height: '100%', gap: 18, padding: '20px 18px',
-    animation: 'fadeIn 0.4s ease',
-  },
-  spider: { fontSize: 52, animation: 'pulse 1.5s infinite',
-    filter: 'drop-shadow(0 0 14px rgba(200,168,48,0.5))' },
-  roleLabel: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 12, color: '#c8a830', letterSpacing: 3,
-    textTransform: 'uppercase',
-  },
-  wordCard: {
-    background: 'rgba(4,12,5,0.9)', border: '2px solid #c8a830',
-    borderRadius: 16, padding: '20px 36px',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-    boxShadow: '0 0 30px rgba(200,168,48,0.2)',
-  },
-  wordLabel: { fontSize: 11, color: '#5a9a30', letterSpacing: 2, textTransform: 'uppercase' },
-  word: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 32, color: '#f0d060',
-    textShadow: '0 0 20px rgba(200,168,48,0.5)',
-  },
-  title: { fontFamily: "'Cinzel', serif", fontSize: 22, color: '#f0d060', letterSpacing: 2 },
-  desc: { fontSize: 13, color: '#7aaa50', textAlign: 'center', lineHeight: 1.6 },
-  inputRow: { display: 'flex', gap: 8, width: '100%' },
-  input: {
-    flex: 1, background: '#0a1a0a', border: '1px solid #2a5a22',
-    borderRadius: 10, padding: '14px 16px',
-    color: '#d8f0b0', fontSize: 16,
-    fontFamily: "'Nunito', sans-serif", outline: 'none',
-  },
-  btn: {
-    fontFamily: "'Cinzel', serif", fontSize: 18,
-    color: '#040c05', background: 'linear-gradient(135deg, #c8a830, #f0d060)',
-    border: 'none', borderRadius: 10, padding: '0 18px',
-    cursor: 'pointer', transition: 'opacity .2s',
-  },
-  myGuessHint: { fontSize: 12, color: '#3a6028' },
-  revealWord: {
-    fontFamily: "'Cinzel', serif",
-    fontSize: 36, color: '#f0d060',
-    textShadow: '0 0 20px rgba(200,168,48,0.5)',
-  },
-  result: { fontSize: 14, color: '#c84830', fontFamily: "'Cinzel', serif" },
-};
